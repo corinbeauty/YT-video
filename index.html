@@ -1,14 +1,24 @@
-/* 左側資訊方框 (大幅縮小並支援手動縮放) */
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>門店內訓自動播放系統</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; font-family: '微軟正黑體', sans-serif; }
+        #player { width: 100vw; height: 100vh; pointer-events: none; }
+        
+        /* 左側資訊方框 (大幅縮小並支援手動縮放) */
         #info-box {
-            position: absolute; top: 5%; left: 1%; width: 150px; /* 初始寬度縮小 */
+            position: absolute; top: 5%; left: 1%; width: 180px; /* 稍微加寬以容納新資訊 */
             background: rgba(0, 0, 0, 0.75); color: #fff;
-            padding: 8px; border-radius: 8px; /* 縮小內邊距與圓角 */
+            padding: 10px; border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.2);
             z-index: 9999; cursor: move;
             resize: both; /* 允許手動縮放 */
             overflow: hidden; /* 防止內容溢出 */
-            min-width: 120px; /* 最小寬度限制 */
+            min-width: 140px; /* 最小寬度限制 */
             min-height: 120px;
         }
         #info-box h2 { margin: 0 0 5px 0; font-size: 14px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 3px; }
@@ -36,23 +46,6 @@
             display: none; /* 預設隱藏 */
             font-size: 10px; color: #888; margin-top: 5px; text-align: center;
         }
-        #info-box h2 { margin: 0 0 15px 0; font-size: 22px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 5px; }
-        .info-row { margin-bottom: 10px; font-size: 15px; line-height: 1.5; }
-        .info-label { color: #aaa; font-weight: bold; }
-        
-        /* 狀態列 */
-        #status-log {
-            margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.1);
-            border-radius: 6px; font-size: 14px; min-height: 40px; color: #ffeb3b;
-        }
-        
-        /* 手動測試按鈕 */
-        #test-btn {
-            margin-top: 15px; width: 100%; padding: 10px;
-            background: #2196F3; color: white; border: none;
-            border-radius: 6px; cursor: pointer; font-size: 16px;
-        }
-        #test-btn:hover { background: #1976D2; }
 
         /* 隱藏的設定視窗 */
         #settings-modal {
@@ -77,7 +70,9 @@
         <div class="info-row"><span class="info-label">🏪 </span><span id="store-name">讀取中...</span></div>
         <div class="info-row"><span class="info-label">📅 </span><span id="current-time">讀取中...</span></div>
         <div class="info-row"><span class="info-label">🎬 </span><span id="video-schedule">載入中...</span></div>
-        <div class="info-row"><span class="info-label">⏰ 下次：</span><span id="next-schedule-time" style="color: #FF9800;">計算中...</span></div>
+        <!-- ★ 新增：預告下次播放時間與影片標題 -->
+        <div class="info-row"><span class="info-label">⏰ 下次時間：</span><span id="next-schedule-time" style="color: #FF9800;">計算中...</span></div>
+        <div class="info-row"><span class="info-label">📺 下次預告：</span><span id="next-video-title" style="color: #FF9800;">計算中...</span></div>
         <div class="info-row"><span class="info-label">▶ 總播：</span><span id="total-play-time">0 分鐘</span></div>
         <div class="info-row"><span class="info-label">⏱ 進度：</span><span id="video-current-time">00:00</span> <span id="loop-estimate" style="color:#03A9F4;"></span></div>
         <div class="info-row"><span class="info-label">📸 截圖：</span><span id="screenshot-count">0 張</span></div>
@@ -203,7 +198,7 @@
             "09/30": { title: "換個腦袋 出路無限(三)", id: "PLCV-Y48MR1JeahnPgzdFJTOezmNtUAziE" }
         };
 
-        // 預設參數 (若 localStorage 沒有資料則使用此預設值)
+        // 預設參數
         const defaultStoreName = "中清店";
         const defaultGasUrl = "https://script.google.com/macros/s/AKfycbwbQo4R0S3kLX0Pc6w9xj6jdSOoWS2vEavN8xQMn77Oi8yV6uKJn7du7NKB9u10UD61/exec";
         const defaultPlayTimes = "12:00, 18:00, 00:00";
@@ -220,13 +215,21 @@
         document.getElementById("input-play-times").value = playTimesStr;
         document.getElementById("input-capture-times").value = captureTimesStr;
 
-        // 解析排程字串為陣列
+        // 解析排程
         let playTimesList = playTimesStr.split(',').map(s => s.trim());
         let scheduleSeconds = captureTimesStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
         let hasTriggered = {};
-        scheduleSeconds.forEach(t => hasTriggered[t] = false); // 初始化截圖標記
+        scheduleSeconds.forEach(t => hasTriggered[t] = false);
 
-        // 設定選單控制
+        // ESC 開啟設定與顯示測試按鈕
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape") {
+                document.getElementById('settings-modal').style.display = 'block';
+                document.getElementById('overlay').style.display = 'block';
+                document.getElementById('test-btn').style.display = 'block'; // 顯示測試按鈕
+            }
+        });
+
         function saveSettings() {
             let newStore = document.getElementById("input-store-name").value.trim();
             let newGas = document.getElementById("input-gas-url").value.trim();
@@ -244,27 +247,34 @@
             location.reload();
         }
 
-        // 取得今日日期的 Key (例如 "08/01") - 支援 URL 參數測試 (如 ?date=08/01)
-        function getTodayKey() {
-            let params = new URLSearchParams(window.location.search);
-            if(params.has('date')) return params.get('date');
-            
-            let today = new Date();
-            let month = (today.getMonth() + 1).toString().padStart(2, '0');
-            let day = today.getDate().toString().padStart(2, '0');
+        // 取得特定日期的 Key (例如 "08/01")
+        function getDateKey(dateObj) {
+            let month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            let day = dateObj.getDate().toString().padStart(2, '0');
             return `${month}/${day}`;
         }
 
-        // 決定今天要播放的清單
+        // 取得今日日期的 Key
+        function getTodayKey() {
+            let params = new URLSearchParams(window.location.search);
+            if(params.has('date')) return params.get('date');
+            return getDateKey(new Date());
+        }
+        
+        // 取得明日日期的 Key
+        function getTomorrowKey() {
+            let tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            return getDateKey(tomorrow);
+        }
+
         const dateKey = getTodayKey();
         const currentPlaylistData = playlistSchedule[dateKey];
-        // 萬一超出 7~9 月範圍，則自動以 8/1 的影片作為預設防止報錯
         const targetPlaylistId = currentPlaylistData ? currentPlaylistData.id : "PLCV-Y48MR1Jdn2OHxmCDXk60S6wj7FFLb";
         const targetTitle = currentPlaylistData ? currentPlaylistData.title : "本日無排程(播放預設影片)";
         
         document.getElementById("video-schedule").innerText = `[${dateKey}] ${targetTitle}`;
 
-        // 系統變數
         let player;
         let playStartTime = null;
         let screenshotCount = 0;
@@ -282,9 +292,9 @@
                     'autoplay': 1, 
                     'controls': 0, 
                     'loop': 1, 
-                    'mute': 1, /* ★ 更改為 1，預設靜音 */
+                    'mute': 1, /* ★ 預設靜音 */
                     'listType': 'playlist',
-                    'list': targetPlaylistId // 動態載入今日排程清單
+                    'list': targetPlaylistId
                 },
                 events: {
                     'onReady': onPlayerReady,
@@ -301,13 +311,11 @@
             if (event.data == YT.PlayerState.PLAYING) {
                 if (!playStartTime) playStartTime = new Date().getTime();
                 
-                // 動態取得清單內目前正在播放的子影片真實標題
                 let vData = player.getVideoData();
                 if (vData && vData.title) {
                     document.getElementById("video-schedule").innerText = `[${dateKey}] ${vData.title}`;
                 }
                 
-                // 計算預估輪播次數
                 videoDurationCache = player.getDuration();
                 if(videoDurationCache > 0){
                     let loops = Math.ceil(3600 / videoDurationCache);
@@ -318,7 +326,6 @@
                     }
                 }
             } else if (event.data == YT.PlayerState.PAUSED) {
-                // 防休眠機制：發現被暫停就強制喚醒
                 setTimeout(() => player.playVideo(), 500);
             }
         }
@@ -326,10 +333,9 @@
         // 時鐘與絕對時間檢查迴圈 (每秒執行)
         setInterval(() => {
             let now = new Date();
-            // 更新目前時間
             document.getElementById("current-time").innerText = now.toLocaleString('zh-TW', { hour12: false });
             
-            // ★ 計算下次播放時間
+            // ★ 計算預告下次播放時間與標題
             let currentMinutes = now.getHours() * 60 + now.getMinutes();
             let timeValues = playTimesList.map(t => {
                 let parts = t.split(':');
@@ -337,7 +343,9 @@
             }).sort((a,b) => a - b);
             
             let nextTimeStr = "";
+            let nextDateKey = dateKey; // 預設為今天的清單
             let foundToday = false;
+            
             for (let t of timeValues) {
                 if (t > currentMinutes) {
                     nextTimeStr = `${Math.floor(t/60).toString().padStart(2,'0')}:${(t%60).toString().padStart(2,'0')} (今日)`;
@@ -347,10 +355,17 @@
             }
             if (!foundToday) {
                 nextTimeStr = `${Math.floor(timeValues[0]/60).toString().padStart(2,'0')}:${(timeValues[0]%60).toString().padStart(2,'0')} (明日)`;
+                nextDateKey = getTomorrowKey(); // 換成明天的日期去查清單
             }
+            
             document.getElementById("next-schedule-time").innerText = nextTimeStr;
+            
+            // 查詢下次播放的影片標題
+            const nextPlaylistData = playlistSchedule[nextDateKey];
+            const nextTargetTitle = nextPlaylistData ? nextPlaylistData.title : "無預定排程";
+            document.getElementById("next-video-title").innerText = `[${nextDateKey}] ${nextTargetTitle}`;
 
-            // ★ 自動重置與觸發機制 (時間一到自動啟動新一輪)
+            // ★ 自動重置與觸發機制
             let currentHHMM = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
             if (playTimesList.includes(currentHHMM) && now.getSeconds() === 0) {
                 playStartTime = now.getTime(); // 重置開播時間
@@ -358,10 +373,14 @@
                 screenshotCount = 0;
                 document.getElementById("screenshot-count").innerText = "0 張";
                 if (player && typeof player.playVideo === 'function') player.playVideo();
-                showLog(`[${currentHHMM}] 排程啟動，開始新一輪巡檢！`, "#4CAF50");
+                showLog(`[${currentHHMM}] 排程啟動，開始巡檢！`, "#4CAF50");
+                
+                // 檢查是否跨日，若是則重新載入網頁以抓取新清單
+                if (dateKey !== getTodayKey()) {
+                    location.reload(); 
+                }
             }
 
-            // 更新影片當前時間
             if(player && player.getCurrentTime) {
                 let currentSec = Math.floor(player.getCurrentTime());
                 let m = Math.floor(currentSec / 60).toString().padStart(2, '0');
@@ -373,13 +392,11 @@
                 let elapsedMs = now.getTime() - playStartTime;
                 let elapsedSeconds = Math.floor(elapsedMs / 1000);
                 
-                // 更新總播放分鐘
                 document.getElementById("total-play-time").innerText = Math.floor(elapsedSeconds / 60) + " 分鐘";
 
-                // 檢查是否到達截圖時間
                 scheduleSeconds.forEach(targetSec => {
                     if (elapsedSeconds >= targetSec && !hasTriggered[targetSec]) {
-                        hasTriggered[targetSec] = true; // 標記已執行
+                        hasTriggered[targetSec] = true;
                         let typeStr = targetSec < 60 ? `${targetSec}秒` : `${targetSec/60}分鐘`;
                         takeAndUploadScreenshot(`排程: ${typeStr}`);
                     }
@@ -393,13 +410,12 @@
             logEl.innerText = msg;
         }
 
-        // 透過擴充功能擷取實體畫面
         function takeAndUploadScreenshot(type = "自動截圖") {
             showLog(`[${type}] 呼叫外掛截圖中...`, "#03A9F4");
             window.postMessage({ type: "REQUEST_CAPTURE" }, "*");
 
             let captureTimeout = setTimeout(() => {
-                showLog(`[${type}] 截圖失敗：未偵測到 Chrome 擴充功能！`, "#f44336");
+                showLog(`[${type}] 截圖失敗：未偵測到外掛！`, "#f44336");
             }, 3000);
 
             function captureListener(event) {
@@ -410,7 +426,7 @@
                     window.removeEventListener("message", captureListener);
 
                     let imgData = event.data.dataUrl;
-                    showLog(`[${type}] 擷取成功，上傳雲端中...`, "#ffeb3b");
+                    showLog(`[${type}] 擷取成功，上傳雲端...`, "#ffeb3b");
                     uploadToCloud(imgData, type);
                 }
             }
@@ -429,10 +445,9 @@
             let formData = new URLSearchParams();
             formData.append('data', JSON.stringify(payload));
 
-            // 因為只要不報錯圖片都有進去，我們直接樂觀顯示成功
             fetch(gasUrl, {
                 method: 'POST',
-                // 使用 no-cors 模式，徹底避免跨域報錯，強制送出
+                // ★ 啟用 no-cors 盲傳模式，無視 CORS 阻擋回傳成功
                 mode: 'no-cors',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
@@ -440,37 +455,15 @@
                 body: formData.toString()
             })
             .then(() => {
-                // 不管回傳什麼，只要 fetch 沒在第一時間斷線，就當作成功
+                // 只要網路沒斷線，就視為傳輸成功
                 screenshotCount++;
                 document.getElementById("screenshot-count").innerText = `${screenshotCount} 張`;
                 showLog(`[${type}] 上傳成功！`, "#4CAF50");
             })
             .catch(err => {
-                // 只有在網路斷線等致命錯誤時才會跑到這裡
-                showLog(`[${type}] 網路斷線，上傳失敗。`, "#f44336");
-                console.error("Fetch 錯誤:", err);
+                showLog(`[${type}] 網路連線失敗。`, "#f44336");
             });
         }
-
-        // 拖曳方框功能
-        const infoBox = document.getElementById("info-box");
-        let isDragging = false, offsetX, offsetY;
-        infoBox.addEventListener("mousedown", (e) => {
-            if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
-            isDragging = true;
-            offsetX = e.clientX - infoBox.getBoundingClientRect().left;
-            offsetY = e.clientY - infoBox.getBoundingClientRect().top;
-            infoBox.style.cursor = "grabbing";
-        });
-        document.addEventListener("mousemove", (e) => {
-            if (!isDragging) return;
-            infoBox.style.left = (e.clientX - offsetX) + "px";
-            infoBox.style.top = (e.clientY - offsetY) + "px";
-        });
-        document.addEventListener("mouseup", () => {
-            isDragging = false;
-            infoBox.style.cursor = "move";
-        });
     </script>
 </body>
 </html>
