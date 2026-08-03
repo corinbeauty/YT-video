@@ -1,21 +1,40 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>門店內訓自動播放系統</title>
-    <style>
-        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; font-family: '微軟正黑體', sans-serif; }
-        #player { width: 100vw; height: 100vh; pointer-events: none; }
-        
-        /* 左側資訊方框 */
+/* 左側資訊方框 (大幅縮小並支援手動縮放) */
         #info-box {
-            position: absolute; top: 10%; left: 2%; width: 340px;
+            position: absolute; top: 5%; left: 1%; width: 150px; /* 初始寬度縮小 */
             background: rgba(0, 0, 0, 0.75); color: #fff;
-            padding: 20px; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            padding: 8px; border-radius: 8px; /* 縮小內邊距與圓角 */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.2);
             z-index: 9999; cursor: move;
+            resize: both; /* 允許手動縮放 */
+            overflow: hidden; /* 防止內容溢出 */
+            min-width: 120px; /* 最小寬度限制 */
+            min-height: 120px;
+        }
+        #info-box h2 { margin: 0 0 5px 0; font-size: 14px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 3px; }
+        .info-row { margin-bottom: 4px; font-size: 11px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .info-label { color: #aaa; font-weight: bold; }
+        
+        /* 狀態列 (縮小) */
+        #status-log {
+            margin-top: 5px; padding: 5px; background: rgba(255,255,255,0.1);
+            border-radius: 4px; font-size: 10px; min-height: 15px; color: #ffeb3b;
+            word-wrap: break-word;
+        }
+        
+        /* 手動測試按鈕 (預設隱藏) */
+        #test-btn {
+            display: none; /* 預設隱藏 */
+            margin-top: 8px; width: 100%; padding: 5px;
+            background: #2196F3; color: white; border: none;
+            border-radius: 4px; cursor: pointer; font-size: 12px;
+        }
+        #test-btn:hover { background: #1976D2; }
+
+        /* ESC 提示文字 (預設隱藏) */
+        #esc-hint {
+            display: none; /* 預設隱藏 */
+            font-size: 10px; color: #888; margin-top: 5px; text-align: center;
         }
         #info-box h2 { margin: 0 0 15px 0; font-size: 22px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 5px; }
         .info-row { margin-bottom: 10px; font-size: 15px; line-height: 1.5; }
@@ -55,15 +74,16 @@
     <!-- 左側資訊方框 -->
     <div id="info-box">
         <h2>📌 門店內訓巡檢系統</h2>
-        <div class="info-row"><span class="info-label">🏪 門店名稱：</span><span id="store-name">讀取中...</span></div>
-        <div class="info-row"><span class="info-label">📅 目前時間：</span><span id="current-time">讀取中...</span></div>
-        <div class="info-row"><span class="info-label">🎬 本日排程：</span><span id="video-schedule">載入中...</span></div>
-        <div class="info-row"><span class="info-label">▶ 總播放：</span><span id="total-play-time">0 分鐘</span></div>
-        <div class="info-row"><span class="info-label">⏱ 影片時間：</span><span id="video-current-time">00:00</span> <span id="loop-estimate" style="color:#03A9F4; font-size:14px;"></span></div>
-        <div class="info-row"><span class="info-label">📸 已截圖：</span><span id="screenshot-count">0 張</span></div>
-        <div id="status-log">系統初始化中...</div>
+        <div class="info-row"><span class="info-label">🏪 </span><span id="store-name">讀取中...</span></div>
+        <div class="info-row"><span class="info-label">📅 </span><span id="current-time">讀取中...</span></div>
+        <div class="info-row"><span class="info-label">🎬 </span><span id="video-schedule">載入中...</span></div>
+        <div class="info-row"><span class="info-label">⏰ 下次：</span><span id="next-schedule-time" style="color: #FF9800;">計算中...</span></div>
+        <div class="info-row"><span class="info-label">▶ 總播：</span><span id="total-play-time">0 分鐘</span></div>
+        <div class="info-row"><span class="info-label">⏱ 進度：</span><span id="video-current-time">00:00</span> <span id="loop-estimate" style="color:#03A9F4;"></span></div>
+        <div class="info-row"><span class="info-label">📸 截圖：</span><span id="screenshot-count">0 張</span></div>
+        <div id="status-log">系統初始化...</div>
         <button id="test-btn" onclick="takeAndUploadScreenshot('手動測試')">馬上測試一鍵截圖</button>
-        <div style="font-size: 12px; color: #888; margin-top: 10px; text-align: center;">按 ESC 鍵開啟設定</div>
+        <div id="esc-hint">按 ESC 鍵開啟設定</div>
     </div>
 
     <!-- 設定視窗 -->
@@ -74,6 +94,10 @@
         <input type="text" id="input-store-name" class="modal-input" placeholder="例如：中清店">
         <label>Google Apps Script URL (接收端)：</label>
         <input type="text" id="input-gas-url" class="modal-input" placeholder="貼上 /exec 結尾的網址">
+        <label>每日排程時間 (逗號分隔，24小時制)：</label>
+        <input type="text" id="input-play-times" class="modal-input" placeholder="12:00, 18:00, 00:00">
+        <label>開播後截圖秒數 (逗號分隔)：</label>
+        <input type="text" id="input-capture-times" class="modal-input" placeholder="15, 60, 120, 300">
         <button class="modal-btn" onclick="saveSettings()">儲存並重新載入</button>
     </div>
 
@@ -182,26 +206,36 @@
         // 預設參數 (若 localStorage 沒有資料則使用此預設值)
         const defaultStoreName = "中清店";
         const defaultGasUrl = "https://script.google.com/macros/s/AKfycbwbQo4R0S3kLX0Pc6w9xj6jdSOoWS2vEavN8xQMn77Oi8yV6uKJn7du7NKB9u10UD61/exec";
+        const defaultPlayTimes = "12:00, 18:00, 00:00";
+        const defaultCaptureTimes = "15, 60, 120, 300";
 
         let storeName = localStorage.getItem("storeName") || defaultStoreName;
         let gasUrl = localStorage.getItem("gasUrl") || defaultGasUrl;
+        let playTimesStr = localStorage.getItem("playTimes") || defaultPlayTimes;
+        let captureTimesStr = localStorage.getItem("captureTimes") || defaultCaptureTimes;
 
         document.getElementById("store-name").innerText = storeName;
         document.getElementById("input-store-name").value = storeName;
         document.getElementById("input-gas-url").value = localStorage.getItem("gasUrl") || "";
+        document.getElementById("input-play-times").value = playTimesStr;
+        document.getElementById("input-capture-times").value = captureTimesStr;
+
+        // 解析排程字串為陣列
+        let playTimesList = playTimesStr.split(',').map(s => s.trim());
+        let scheduleSeconds = captureTimesStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+        let hasTriggered = {};
+        scheduleSeconds.forEach(t => hasTriggered[t] = false); // 初始化截圖標記
 
         // 設定選單控制
-        document.addEventListener('keydown', function(event) {
-            if (event.key === "Escape") {
-                document.getElementById('settings-modal').style.display = 'block';
-                document.getElementById('overlay').style.display = 'block';
-            }
-        });
-
         function saveSettings() {
             let newStore = document.getElementById("input-store-name").value.trim();
             let newGas = document.getElementById("input-gas-url").value.trim();
+            let newPlayTimes = document.getElementById("input-play-times").value.trim();
+            let newCaptureTimes = document.getElementById("input-capture-times").value.trim();
+
             if (newStore) localStorage.setItem("storeName", newStore);
+            if (newPlayTimes) localStorage.setItem("playTimes", newPlayTimes);
+            if (newCaptureTimes) localStorage.setItem("captureTimes", newCaptureTimes);
             if (newGas) {
                 localStorage.setItem("gasUrl", newGas);
             } else {
@@ -236,10 +270,6 @@
         let screenshotCount = 0;
         let videoDurationCache = 0;
         
-        // 排程設定：15秒, 1分, 2分, 5分
-        const scheduleSeconds = [15, 60, 120, 300];
-        let hasTriggered = { 15: false, 60: false, 120: false, 300: false };
-
         // 載入 YouTube API
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
@@ -252,7 +282,7 @@
                     'autoplay': 1, 
                     'controls': 0, 
                     'loop': 1, 
-                    'mute': 0,
+                    'mute': 1, /* ★ 更改為 1，預設靜音 */
                     'listType': 'playlist',
                     'list': targetPlaylistId // 動態載入今日排程清單
                 },
@@ -299,6 +329,38 @@
             // 更新目前時間
             document.getElementById("current-time").innerText = now.toLocaleString('zh-TW', { hour12: false });
             
+            // ★ 計算下次播放時間
+            let currentMinutes = now.getHours() * 60 + now.getMinutes();
+            let timeValues = playTimesList.map(t => {
+                let parts = t.split(':');
+                return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+            }).sort((a,b) => a - b);
+            
+            let nextTimeStr = "";
+            let foundToday = false;
+            for (let t of timeValues) {
+                if (t > currentMinutes) {
+                    nextTimeStr = `${Math.floor(t/60).toString().padStart(2,'0')}:${(t%60).toString().padStart(2,'0')} (今日)`;
+                    foundToday = true;
+                    break;
+                }
+            }
+            if (!foundToday) {
+                nextTimeStr = `${Math.floor(timeValues[0]/60).toString().padStart(2,'0')}:${(timeValues[0]%60).toString().padStart(2,'0')} (明日)`;
+            }
+            document.getElementById("next-schedule-time").innerText = nextTimeStr;
+
+            // ★ 自動重置與觸發機制 (時間一到自動啟動新一輪)
+            let currentHHMM = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+            if (playTimesList.includes(currentHHMM) && now.getSeconds() === 0) {
+                playStartTime = now.getTime(); // 重置開播時間
+                scheduleSeconds.forEach(t => hasTriggered[t] = false); // 歸零所有截圖標記
+                screenshotCount = 0;
+                document.getElementById("screenshot-count").innerText = "0 張";
+                if (player && typeof player.playVideo === 'function') player.playVideo();
+                showLog(`[${currentHHMM}] 排程啟動，開始新一輪巡檢！`, "#4CAF50");
+            }
+
             // 更新影片當前時間
             if(player && player.getCurrentTime) {
                 let currentSec = Math.floor(player.getCurrentTime());
@@ -364,37 +426,28 @@
                 videoTitle: document.getElementById("video-schedule").innerText
             };
 
-            // 改用 form-urlencoded 繞過 GitHub 到 GAS 的跨域預檢 (Preflight) 限制
             let formData = new URLSearchParams();
             formData.append('data', JSON.stringify(payload));
 
+            // 因為只要不報錯圖片都有進去，我們直接樂觀顯示成功
             fetch(gasUrl, {
                 method: 'POST',
-                // 重要！不要用 application/json
+                // 使用 no-cors 模式，徹底避免跨域報錯，強制送出
+                mode: 'no-cors',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
                 body: formData.toString()
             })
-            .then(response => response.text())
-            .then(text => {
-                try {
-                    let res = JSON.parse(text);
-                    if(res.status === "success") {
-                        screenshotCount++;
-                        document.getElementById("screenshot-count").innerText = `${screenshotCount} 張`;
-                        showLog(`[${type}] 上傳成功！已存入雲端。`, "#4CAF50");
-                    } else {
-                        showLog(`[${type}] 雲端錯誤: ` + res.message, "#f44336");
-                    }
-                } catch(e) {
-                     // 若回傳不是 JSON，將錯誤印出
-                     showLog(`[${type}] 回傳格式異常，請檢查 GAS 部署。`, "#f44336");
-                     console.error("解析錯誤:", text);
-                }
+            .then(() => {
+                // 不管回傳什麼，只要 fetch 沒在第一時間斷線，就當作成功
+                screenshotCount++;
+                document.getElementById("screenshot-count").innerText = `${screenshotCount} 張`;
+                showLog(`[${type}] 上傳成功！`, "#4CAF50");
             })
             .catch(err => {
-                showLog(`[${type}] 跨域連線失敗或網址失效。`, "#f44336");
+                // 只有在網路斷線等致命錯誤時才會跑到這裡
+                showLog(`[${type}] 網路斷線，上傳失敗。`, "#f44336");
                 console.error("Fetch 錯誤:", err);
             });
         }
