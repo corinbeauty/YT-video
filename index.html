@@ -85,7 +85,7 @@
                     <span id="upload-status" class="text-green-400 font-mono break-words leading-tight">系統待命</span>
                 </div>
                 <div class="text-[9px] text-blue-300 break-words whitespace-normal leading-tight">
-                    📁 截圖儲存至: [休閒部門店內訓巡檢紀錄_V3]
+                    📁 截圖將同步至: 總部雲端資料夾
                 </div>
             </div>
         </div>
@@ -372,10 +372,12 @@
             sessionStartTime = Date.now();
 
             if (!testDateStr) {
-                // 排程截圖 (功能：截圖功能開啟)
-                setTimeout(() => captureAndUpload("截圖1_開播5分鐘"), 5 * 60 * 1000);
-                setTimeout(() => captureAndUpload("截圖2_開播30分鐘"), 30 * 60 * 1000);
-                setTimeout(() => captureAndUpload("截圖3_開播60分鐘滿時"), 60 * 60 * 1000);
+                // 排程截圖 (修改為測試用高頻率截圖：1, 3, 5, 10, 15分鐘)
+                setTimeout(() => captureAndUpload("測試截圖_1分鐘"), 1 * 60 * 1000);
+                setTimeout(() => captureAndUpload("測試截圖_3分鐘"), 3 * 60 * 1000);
+                setTimeout(() => captureAndUpload("測試截圖_5分鐘"), 5 * 60 * 1000);
+                setTimeout(() => captureAndUpload("測試截圖_10分鐘"), 10 * 60 * 1000);
+                setTimeout(() => captureAndUpload("測試截圖_15分鐘"), 15 * 60 * 1000);
 
                 // 總時長限制：65 分鐘後自動關閉整個網頁
                 setTimeout(() => window.close(), 65 * 60 * 1000);
