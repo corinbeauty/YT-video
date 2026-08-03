@@ -380,18 +380,35 @@
             }).catch(() => showLog(`[${type}] 連線錯誤。`, "#f44336"));
         }
 
-        // 拖曳方框
+        // 拖曳與縮放衝突修正 (防護區間機制)
         const infoBox = document.getElementById("info-box");
         let isDragging = false, offsetX, offsetY;
+        
         infoBox.addEventListener("mousedown", (e) => {
             if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
-            isDragging = true; offsetX = e.clientX - infoBox.getBoundingClientRect().left; offsetY = e.clientY - infoBox.getBoundingClientRect().top;
+            
+            // ★ 核心修正：偵測滑鼠是否點擊在右下角的「縮放控制代碼」範圍 (約 25x25 像素)
+            let rect = infoBox.getBoundingClientRect();
+            if (e.clientX >= rect.right - 25 && e.clientY >= rect.bottom - 25) {
+                return; // 如果點在右下角，直接中斷拖曳邏輯，讓瀏覽器執行原生縮放！
+            }
+
+            isDragging = true; 
+            offsetX = e.clientX - rect.left; 
+            offsetY = e.clientY - rect.top;
             infoBox.style.cursor = "grabbing";
         });
+        
         document.addEventListener("mousemove", (e) => {
-            if (!isDragging) return; infoBox.style.left = (e.clientX - offsetX) + "px"; infoBox.style.top = (e.clientY - offsetY) + "px";
+            if (!isDragging) return; 
+            infoBox.style.left = (e.clientX - offsetX) + "px"; 
+            infoBox.style.top = (e.clientY - offsetY) + "px";
         });
-        document.addEventListener("mouseup", () => { isDragging = false; infoBox.style.cursor = "move"; });
+        
+        document.addEventListener("mouseup", () => { 
+            isDragging = false; 
+            infoBox.style.cursor = "move"; 
+        });
     </script>
 </body>
 </html>
