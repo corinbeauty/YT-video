@@ -8,9 +8,8 @@
         body { margin: 0; padding: 0; background-color: #000; overflow: hidden; font-family: '微軟正黑體', sans-serif; }
         #player { width: 100vw; height: 100vh; pointer-events: none; }
         
-        /* 左側資訊方框 (大幅縮小並支援手動縮放) */
         #info-box {
-            position: absolute; top: 5%; left: 1%; width: 180px; /* 稍微加寬以容納新資訊 */
+            position: absolute; top: 5%; left: 1%; width: 250px; /* ★ 固定約可容納 20 個中文字元的寬度 */
             background: rgba(0, 0, 0, 0.75); color: #fff;
             padding: 10px; border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
@@ -18,12 +17,15 @@
             z-index: 9999; cursor: move;
             resize: both; /* 允許手動縮放 */
             overflow: hidden; /* 防止內容溢出 */
-            min-width: 140px; /* 最小寬度限制 */
+            min-width: 200px; /* 最小寬度限制 */
             min-height: 120px;
         }
         #info-box h2 { margin: 0 0 5px 0; font-size: 14px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 3px; }
-        .info-row { margin-bottom: 4px; font-size: 11px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .info-label { color: #aaa; font-weight: bold; }
+        
+        /* ★ 採用 Flexbox 讓文字自動換行且排版對齊 (移除 nowrap 截斷設定) */
+        .info-row { display: flex; align-items: flex-start; margin-bottom: 5px; font-size: 11.5px; line-height: 1.5; }
+        .info-label { color: #aaa; font-weight: bold; flex-shrink: 0; white-space: nowrap; }
+        .info-value { flex-grow: 1; overflow-wrap: break-word; word-break: break-all; } /* ★ 長文字強制換行，且第二行會自動對齊第一行 */
         
         /* 狀態列 (縮小) */
         #status-log {
@@ -67,15 +69,14 @@
     <!-- 左側資訊方框 -->
     <div id="info-box">
         <h2>📌 門店內訓巡檢系統</h2>
-        <div class="info-row"><span class="info-label">🏪 </span><span id="store-name">讀取中...</span></div>
-        <div class="info-row"><span class="info-label">📅 </span><span id="current-time">讀取中...</span></div>
-        <div class="info-row"><span class="info-label">🎬 </span><span id="video-schedule">載入中...</span></div>
-        <!-- ★ 新增：預告下次播放時間與影片標題 -->
-        <div class="info-row"><span class="info-label">⏰ 下次時間：</span><span id="next-schedule-time" style="color: #FF9800;">計算中...</span></div>
-        <div class="info-row"><span class="info-label">📺 下次預告：</span><span id="next-video-title" style="color: #FF9800;">計算中...</span></div>
-        <div class="info-row"><span class="info-label">▶ 總播：</span><span id="total-play-time">0 分鐘</span></div>
-        <div class="info-row"><span class="info-label">⏱ 進度：</span><span id="video-current-time">00:00</span> <span id="loop-estimate" style="color:#03A9F4;"></span></div>
-        <div class="info-row"><span class="info-label">📸 截圖：</span><span id="screenshot-count">0 張</span></div>
+        <div class="info-row"><span class="info-label">🏪 </span><span class="info-value" id="store-name">讀取中...</span></div>
+        <div class="info-row"><span class="info-label">📅 </span><span class="info-value" id="current-time">讀取中...</span></div>
+        <div class="info-row"><span class="info-label">🎬 </span><span class="info-value" id="video-schedule">載入中...</span></div>
+        <div class="info-row"><span class="info-label">⏰ 下次時間：</span><span class="info-value" id="next-schedule-time" style="color: #FF9800;">計算中...</span></div>
+        <div class="info-row"><span class="info-label">📺 下次預告：</span><span class="info-value" id="next-video-title" style="color: #FF9800;">計算中...</span></div>
+        <div class="info-row"><span class="info-label">▶ 總播：</span><span class="info-value" id="total-play-time">0 分鐘</span></div>
+        <div class="info-row"><span class="info-label">⏱ 進度：</span><span class="info-value"><span id="video-current-time">00:00</span> <span id="loop-estimate" style="color:#03A9F4;"></span></span></div>
+        <div class="info-row"><span class="info-label">📸 截圖：</span><span class="info-value" id="screenshot-count">0 張</span></div>
         <div id="status-log">系統初始化...</div>
         <button id="test-btn" onclick="takeAndUploadScreenshot('手動測試')">馬上測試一鍵截圖</button>
         <div id="esc-hint">按 ESC 鍵開啟設定</div>
