@@ -1,62 +1,549 @@
-/**
- * 門店內訓影音自動巡檢系統 - 雲端接收端完整版
- */
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 確保 YouTube 不會因為 Referrer 阻擋 (Error 153) -->
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>門店內訓影音自動播放暨雲端巡檢系統 V4.2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        #player-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        #player {
+            width: 100%;
+            height: 100%;
+            pointer-events: auto;
+        }
+        /* 隱藏捲軸但允許捲動 */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* 使浮水印框可縮放 */
+        #watermark-box {
+            resize: both;
+            overflow: auto; 
+            min-width: 130px; 
+            width: 160px; /* 直條版面 */
+            min-height: 250px; 
+            max-width: 90vw;
+            max-height: 90vh;
+        }
+    </style>
+</head>
+<body class="bg-black text-white select-none">
 
-function doPost(e) {
-  try {
-    // 1. 解析來自 HTML 網頁的資料
-    var data = JSON.parse(e.postData.contents);
-    
-    var storeName = data.storeName || "未知門店";
-    var slot = data.slot || "未知時段";
-    var timestamp = data.timestamp || "";
-    var videoTitle = data.videoTitle || "無標題";
-    var phaseTag = data.phaseTag || "巡檢";
-    var imageBase64 = data.imageBase64;
-    
-    // 2. 移除 Base64 header，並轉換為 Blob 圖片物件
-    var base64Data = imageBase64.replace(/^data:image\/(png|jpeg);base64,/, "");
-    var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), "image/jpeg");
-    
-    // 3. 建立檔案名稱 (格式: 2026-08-01-12-00-00_門店名稱_時段_階段.jpg)
-    var safeTimestamp = timestamp.replace(/[: ]/g, "-"); 
-    var fileName = safeTimestamp + "_" + storeName + "_" + slot + "_" + phaseTag + ".jpg";
-    blob.setName(fileName);
-    
-    // 4. 綁定您指定的資料夾 ID
-    var targetFolderId = "1KeOX9WilM7VhhAadhCYEse7g0Xthtskl";
-    var targetFolder = DriveApp.getFolderById(targetFolderId);
-    
-    // 5. 將圖片檔案儲存到該資料夾內
-    var file = targetFolder.createFile(blob);
-    
-    // 6. 回傳成功訊息給網頁
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      fileUrl: file.getUrl()
-    })).setMimeType(ContentService.MimeType.JSON);
-    
-  } catch (error) {
-    // 錯誤日誌生成器：如果發生異常，在雲端硬碟根目錄寫入錯誤檔案
-    try {
-       DriveApp.createFile("Error_Log_" + new Date().getTime() + ".txt", error.toString());
-    } catch(e) {}
-    
-    // 回傳錯誤訊息給網頁前端
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
+    <!-- 主播放容器 (包含動態浮水印，供截圖使用) -->
+    <div id="capture-region" class="relative w-full h-full">
+        <!-- YouTube 播放器 -->
+        <div id="player-container">
+            <div id="player"></div>
+        </div>
 
-/**
- * ！！！非常重要！！！
- * 請在 GAS 編輯器上方工具列選擇此「testAuth」函式並點擊「執行(Run)」
- * 藉此觸發 Google 雲端硬碟的權限審查畫面
- */
-function testAuth() {
-  var folderId = "1KeOX9WilM7VhhAadhCYEse7g0Xthtskl";
-  var folder = DriveApp.getFolderById(folderId);
-  Logger.log("恭喜！授權已成功開啟！您指定的資料夾名稱為：" + folder.getName());
-}
+        <!-- 畫面上方動態防偽浮水印 (直條版面、預設垂直置中靠左) -->
+        <div id="watermark-box" class="absolute z-50 bg-black/85 backdrop-blur-md border border-white/20 p-2.5 rounded-xl shadow-2xl pointer-events-auto flex flex-col" style="top: 50%; left: 16px; transform: translateY(-50%);">
+            <!-- 拖曳把手 -->
+            <div id="drag-handle" class="w-full bg-gray-700/50 hover:bg-gray-600/80 cursor-move text-center text-[9px] text-gray-300 py-1 rounded mb-2 transition-colors shrink-0">
+                ≡ 拖曳視窗 ≡
+            </div>
+
+            <!-- 狀態標籤 -->
+            <div class="flex flex-col space-y-1.5 mb-2 shrink-0">
+                <div class="flex items-center space-x-1.5">
+                    <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping shrink-0"></span>
+                    <span class="font-bold text-red-400 text-[10px] tracking-wider uppercase shrink-0">內訓中</span>
+                </div>
+                <span id="store-display" class="bg-blue-600/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono inline-block w-fit shrink-0">門店未設定</span>
+                <span id="slot-display" class="bg-emerald-600/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono inline-block w-fit shrink-0">時段辨識中</span>
+            </div>
+            
+            <h1 id="video-title" class="text-xs font-bold text-white break-words whitespace-normal shrink-0 leading-tight mb-1">正在載入播放清單...</h1>
+            <p id="clock-display" class="text-yellow-400 font-mono text-[11px] mt-1 mb-1 shrink-0 break-words leading-tight">讀取中...</p>
+            
+            <!-- 新增：即時監控數據面板 -->
+            <div class="mt-1 mb-2 text-[10px] text-gray-300 space-y-1 shrink-0 bg-black/40 p-2 rounded border border-gray-700/50">
+                <div class="flex justify-between">
+                    <span>▶ 總播放:</span>
+                    <span class="text-white font-mono"><span id="played-time">0</span> 分鐘</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>⏱ 播放進度:</span>
+                    <span class="text-white font-mono" id="current-video-time">00:00</span>
+                </div>
+                <!-- 新增：影片長度與預計輪播次數 -->
+                <div class="flex justify-between">
+                    <span>⏳ 影片長度:</span>
+                    <span class="text-white font-mono text-[9px]" id="video-duration-info">讀取中...</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>📸 截圖:</span>
+                    <span class="text-white font-mono"><span id="capture-count">0</span> 張</span>
+                </div>
+            </div>
+
+            <!-- 狀態與截圖位置說明 -->
+            <div class="mt-auto border-t border-gray-700/50 pt-2 text-[10px] text-gray-400 shrink-0">
+                <div class="flex flex-col space-y-1 mb-1">
+                    <span id="upload-status" class="text-green-400 font-mono break-words leading-tight">系統待命</span>
+                </div>
+                <div class="text-[9px] text-blue-300 break-words whitespace-normal leading-tight">
+                    📁 截圖將同步至: 總部雲端資料夾
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 設定選單 (按下 Esc 時可設定) -->
+    <div id="config-modal" class="fixed inset-0 bg-black/90 backdrop-blur-lg z-[100] flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh]">
+            <h2 class="text-xl font-bold text-white border-b border-gray-800 pb-3 mb-4 flex justify-between items-center">
+                <span>門店系統參數設定 V4.2</span>
+                <span class="text-xs font-normal text-gray-500">按 ESC 可再次呼叫此選單</span>
+            </h2>
+            
+            <div class="space-y-4 overflow-y-auto hide-scrollbar flex-grow pr-2">
+                <!-- 基本設定 -->
+                <div class="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50">
+                    <h3 class="text-sm font-semibold text-blue-400 mb-3">基本連線設定</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">門店名稱 (將顯示於截圖浮水印)</label>
+                            <input type="text" id="cfg-store-name" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" placeholder="例如：台北忠孝店">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Google Apps Script URL (接收截圖的雲端 API)</label>
+                            <input type="text" id="cfg-gas-url" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" placeholder="https://script.google.com/macros/s/.../exec">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 自訂設定 -->
+                <div class="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50 border-l-4 border-l-purple-500">
+                    <h3 class="text-sm font-semibold text-purple-400 mb-3">進階控制</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">自訂播放清單 JSON (動態更新列表)</label>
+                            <textarea id="cfg-custom-playlist" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-purple-500" placeholder='[{"id":"影片ID","title":"標題"}]'></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-4 mt-4 border-t border-gray-800 flex justify-between items-center">
+                <button onclick="forceTestCapture()" class="text-xs text-green-400 hover:text-green-300 underline underline-offset-2">馬上測試一鍵截圖</button>
+                <div class="flex space-x-3">
+                    <button onclick="hideConfigModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">取消</button>
+                    <button onclick="saveAndReload()" class="bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm px-6 py-2 rounded-lg transition shadow-lg shadow-blue-900/50">儲存並重新載入</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const defaultPlaylists = [
+            { id: "PLCV-Y48MR1Jd-DqEGEVW0txYmxFOpEmGz", title: "讓客人說Yes !優質的銷售心法 下集" },
+            { id: "PLCV-Y48MR1JcVZKK-xxhyRIo0recmZoJT", title: "敢於挑戰夢想 上集" },
+            { id: "PLCV-Y48MR1Je4gmZw6gGSBWXFmgTiFN4b", title: "敢於挑戰夢想 下集" },
+            { id: "PLCV-Y48MR1JexttsFgAYwdcxvK5gJG8qZ", title: "態度決勝負 上集" },
+            { id: "PLCV-Y48MR1JfZVCEEjgHSIQeJiutTd1SI", title: "態度決勝負 下集" },
+            { id: "PLCV-Y48MR1JcXXO9pouB_LTAYNTp9RaVH", title: "成功優質生活的五Ｑ必勝法則 上集" },
+            { id: "PLCV-Y48MR1JfRcSGSs76msFc7PxGyL9DZ", title: "成功優質生活的五Ｑ必勝法則 下集" },
+            { id: "PLCV-Y48MR1JdUTJ0O4Rj5i8fu0ptsK0vt", title: "現代人職場大贏家法則 上集" },
+            { id: "PLCV-Y48MR1JcE6f2iHnl6NBAPI5S_aWwE", title: "現代人職場大贏家法則 下集" },
+            { id: "PLCV-Y48MR1JcBJKaDWk5fQvQk4ZTWLAi8", title: "從關係中找回生命的核心價值 上集" },
+            { id: "PLCV-Y48MR1Jd4QMf17fX30a5AJLjw25A9", title: "從關係中找回生命的核心價值 下集" },
+            { id: "PLCV-Y48MR1JeN18nT82cA3TFtKi9xx5KL", title: "不感動也難-新時代的人際吸引力 上集" },
+            { id: "PLCV-Y48MR1JfhG7m1IgyOGyLsItrRTFgY", title: "不感動也難-新時代的人際吸引力 下集" },
+            { id: "PLCV-Y48MR1JcqLgqA4gq2c-D4fOF2uChr", title: "揪感心的服務-好客由你來創造 上集" },
+            { id: "PLCV-Y48MR1JdsMfSKMVCSOOyuUCpm7CC3", title: "揪感心的服務-好客由你來創造 下集" },
+            { id: "PLCV-Y48MR1JfgoDMBcThxIgW93hqvs-v_", title: "如何在逆境中創造優勢 上集" },
+            { id: "PLCV-Y48MR1Jf-w_hZ3mtH2C_brw9WTqzm", title: "如何在逆境中創造優勢 下集" },
+            { id: "PLCV-Y48MR1Jdb2pjUqzusMOfQby3Llq5l", title: "好聲音溝通力-把話說好，讓溝通更有效率 上集" },
+            { id: "PLCV-Y48MR1Jfw5PaIEadYpASQSYKHFny8", title: "好聲音溝通力-把話說好，讓溝通更有效率 下集" },
+            { id: "PLCV-Y48MR1Jcemhkp5LUYZRL1S539FWLL", title: "好聲音形象力-用聲音創造好形象 上集" },
+            { id: "PLCV-Y48MR1JcgZ04uRg2yUVp4OQKTiCEW", title: "好聲音形象力-用聲音創造好形象 下集" },
+            { id: "PLCV-Y48MR1Jfm2y2IT0xBfJstkR8ud9jJ", title: "高獲利的銷售技能與販賣技巧 上集" },
+            { id: "PLCV-Y48MR1JcJVKDyl4yk1cVjB3dg_UOK", title: "高獲利的銷售技能與販賣技巧 下集" },
+            { id: "PLCV-Y48MR1JdLBYLz1uUDX6_lAw2XcbEt", title: "超級顧客的服務管理與VIP經營 上集" },
+            { id: "PLCV-Y48MR1JdTwXz15k5On8GWPFpQO6mY", title: "超級顧客的服務管理與VIP經營 下集" },
+            { id: "PLCV-Y48MR1JdU7SJDKjQZfeNn7agRTM6p", title: "最有溫度的感動行銷 上集" },
+            { id: "PLCV-Y48MR1JdDq7jp2Ia9ASq31rzDAY3z", title: "最有溫度的感動行銷 下集" },
+            { id: "PLCV-Y48MR1JdvOgifjZAZiQVx1o1mtwYo", title: "打動人心的顧客經營祕訣 上集" },
+            { id: "PLCV-Y48MR1Jfj3zhvGDoj449HPeYWlqlW", title: "打動人心的顧客經營祕訣 下集" },
+            { id: "PLCV-Y48MR1JfoPcxRduD2X6DHEs0-vHz-", title: "如何經營一個美滿的家 上半部" },
+            { id: "PLCV-Y48MR1JfhoOu-uwe_l0L17_htAKBs", title: "如何經營一個美滿的家 下半部" },
+            { id: "PLCV-Y48MR1Jdn2OHxmCDXk60S6wj7FFLb", title: "如何成為卓越的上班族 上半部" },
+            { id: "PLCV-Y48MR1JdRXg7LtatMu_pkA26xckL_", title: "如何成為卓越的上班族 下半部" },
+            { id: "PLCV-Y48MR1JdeHiauGYq9un0r0sIjzXje", title: "突破現狀.自我成長 上半部" },
+            { id: "PLCV-Y48MR1Jd7sTN6AGyVkeMmWWnFIBsX", title: "突破現狀.自我成長 下半部" },
+            { id: "PLCV-Y48MR1JeOyl1b2_fP5ECaBCBNHEHd", title: "如何創造好心情 上半部" },
+            { id: "PLCV-Y48MR1JfrtpJUyv3VkeAyNpnnPiyz", title: "如何創造好心情 下半部" },
+            { id: "PLCV-Y48MR1JfO6qO9chPztCeJ47eXp5ss", title: "如何提升銷售戰力 第一部第一~三集" },
+            { id: "PLCV-Y48MR1JeI-1T_RTdMFUEKpMW8dGyf", title: "如何提升銷售戰力 第一部第四集、第二部第一~二集" },
+            { id: "PLCV-Y48MR1JelWTnLOjMLMLdkjlYc3QHU", title: "如何提升銷售戰力 第二部第三~四集、第三部第一集" },
+            { id: "PLCV-Y48MR1JcbT8xfkUtkKmyV5DThX3pj", title: "如何提升銷售戰力 第三部第二~四集" }
+        ];
+
+        let storeName = localStorage.getItem("STORE_NAME") || "";
+        let gasUrl = localStorage.getItem("GAS_URL") || "https://script.google.com/macros/s/AKfycbwbQo4R0S3kLX0Pc6w9xj6jdSOoWS2vEavN8xQMn77Oi8yV6uKJn7du7NKB9u10UD61/exec";
+        let customPlaylistStr = localStorage.getItem("CUSTOM_PLAYLIST") || "";
+        
+        let player;
+        let currentPlaylist;
+        let currentSlot = "一般時段";
+        let activePlaylists = [];
+        
+        // 追蹤數據
+        let sessionStartTime = null;
+        let captureCount = 0;
+        
+        // 防休眠：記錄各階段截圖是否已完成
+        let capturedPhases = {
+            15: false,
+            60: false,
+            120: false,
+            300: false
+        };
+
+        const watermarkBox = document.getElementById('watermark-box');
+        const dragHandle = document.getElementById('drag-handle');
+        let isDragging = false, startX, startY, initialX, initialY;
+
+        dragHandle.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            // 使用 getBoundingClientRect 獲取實際像素位置，避免 translateY 造成跳動
+            const rect = watermarkBox.getBoundingClientRect();
+            initialX = rect.left;
+            initialY = rect.top;
+            
+            // 移除 transform，直接使用絕對位置
+            watermarkBox.style.transform = 'none';
+            watermarkBox.style.left = initialX + 'px';
+            watermarkBox.style.top = initialY + 'px';
+
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+        });
+
+        function drag(e) {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            watermarkBox.style.left = initialX + dx + 'px';
+            watermarkBox.style.top = initialY + dy + 'px';
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                activePlaylists = customPlaylistStr ? JSON.parse(customPlaylistStr) : defaultPlaylists;
+            } catch (e) {
+                console.error("自訂清單解析失敗", e);
+                activePlaylists = defaultPlaylists;
+            }
+
+            if (!storeName || !gasUrl) {
+                showConfigModal();
+            } else {
+                updateStoreDisplay();
+            }
+
+            detectTimeSlot();
+            setInterval(updateClock, 1000);
+            updateClock();
+
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') showConfigModal();
+            });
+            
+            if (storeName && gasUrl && !document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+                loadYouTubeAPI();
+            }
+        });
+
+        function detectTimeSlot() {
+            const hour = new Date().getHours();
+            if (hour >= 11 && hour <= 13) {
+                currentSlot = "12點午間時段";
+            } else if (hour >= 17 && hour <= 19) {
+                currentSlot = "18點晚間時段";
+            } else if (hour >= 23 || hour <= 1) {
+                currentSlot = "00點凌晨時段";
+            } else {
+                currentSlot = "一般非規定時段";
+            }
+            document.getElementById('slot-display').innerText = currentSlot;
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const timePart = String(now.getHours()).padStart(2, '0') + ':' +
+                             String(now.getMinutes()).padStart(2, '0') + ':' +
+                             String(now.getSeconds()).padStart(2, '0');
+                             
+            let datePart = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+            
+            document.getElementById('clock-display').innerText = `${datePart} ${timePart}`;
+
+            // 更新總播放時間 (從取得 sessionStartTime 開始算)
+            if (sessionStartTime) {
+                const elapsedMillis = Date.now() - sessionStartTime;
+                const elapsedSeconds = Math.floor(elapsedMillis / 1000);
+                const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+                document.getElementById('played-time').innerText = elapsedMinutes;
+                
+                // 防休眠截圖引擎：比對真實時間戳，避免瀏覽器背景節能導致漏截圖
+                if (elapsedSeconds >= 15 && !capturedPhases[15]) {
+                    capturedPhases[15] = true;
+                    captureAndUpload("截圖1_15秒");
+                }
+                if (elapsedSeconds >= 60 && !capturedPhases[60]) {
+                    capturedPhases[60] = true;
+                    captureAndUpload("截圖2_1分鐘");
+                }
+                if (elapsedSeconds >= 120 && !capturedPhases[120]) {
+                    capturedPhases[120] = true;
+                    captureAndUpload("截圖3_2分鐘");
+                }
+                if (elapsedSeconds >= 300 && !capturedPhases[300]) {
+                    capturedPhases[300] = true;
+                    captureAndUpload("截圖4_5分鐘");
+                }
+            }
+
+            // 防休眠機制：如果影片被瀏覽器偷偷暫停 (State == 2)，強制喚醒播放
+            if (player && typeof player.getPlayerState === 'function') {
+                if (player.getPlayerState() === 2) {
+                    console.log("偵測到背景休眠暫停，強制喚醒...");
+                    player.playVideo();
+                }
+                
+                // 更新影片目前播放進度
+                const currentSecs = Math.floor(player.getCurrentTime());
+                if (!isNaN(currentSecs)) {
+                    const m = Math.floor(currentSecs / 60);
+                    const s = currentSecs % 60;
+                    document.getElementById('current-video-time').innerText = 
+                        String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+                }
+            }
+        }
+
+        function updateStoreDisplay() {
+            document.getElementById('store-display').innerText = storeName || "門店未設定";
+        }
+
+        function showConfigModal() {
+            document.getElementById('cfg-store-name').value = storeName;
+            document.getElementById('cfg-gas-url').value = gasUrl;
+            document.getElementById('cfg-custom-playlist').value = customPlaylistStr;
+            document.getElementById('config-modal').classList.remove('hidden');
+        }
+        
+        function hideConfigModal() {
+            document.getElementById('config-modal').classList.add('hidden');
+        }
+
+        function saveAndReload() {
+            storeName = document.getElementById('cfg-store-name').value.trim();
+            gasUrl = document.getElementById('cfg-gas-url').value.trim();
+            customPlaylistStr = document.getElementById('cfg-custom-playlist').value.trim();
+            
+            if (customPlaylistStr) {
+                try { JSON.parse(customPlaylistStr); } 
+                catch (e) { alert("JSON 格式錯誤！"); return; }
+            }
+
+            localStorage.setItem("STORE_NAME", storeName);
+            localStorage.setItem("GAS_URL", gasUrl);
+            localStorage.setItem("CUSTOM_PLAYLIST", customPlaylistStr);
+            window.location.reload();
+        }
+
+        function getTargetPlaylist() {
+            let targetDate = new Date();
+            const startOfYear = new Date(targetDate.getFullYear(), 0, 0);
+            const diff = targetDate - startOfYear;
+            const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+            
+            if (!activePlaylists || activePlaylists.length === 0) return { id: "", title: "清單為空" };
+            return activePlaylists[dayOfYear % activePlaylists.length];
+        }
+
+        function loadYouTubeAPI() {
+            var tag = document.createElement('script');
+            tag.src = "https://www.youtube.com/iframe_api";
+            var firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        }
+
+        function onYouTubeIframeAPIReady() {
+            currentPlaylist = getTargetPlaylist();
+            document.getElementById('video-title').innerText = currentPlaylist.title;
+
+            if (!currentPlaylist.id) return;
+
+            player = new YT.Player('player', {
+                host: 'https://www.youtube-nocookie.com',
+                playerVars: {
+                    'listType': 'playlist',
+                    'list': currentPlaylist.id,
+                    'autoplay': 1,
+                    'controls': 1,
+                    'rel': 0,
+                    'origin': 'https://www.youtube.com'
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange,
+                    'onError': (e) => console.error("YT Error", e.data)
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            // 自動靜音並播放
+            event.target.mute();
+            event.target.playVideo();
+            
+            // 記錄本次開啟任務的起始時間，啟動防休眠截圖引擎
+            sessionStartTime = Date.now();
+
+            // 總時長限制：65 分鐘後自動關閉整個網頁
+            setTimeout(() => window.close(), 65 * 60 * 1000);
+        }
+
+        function onPlayerStateChange(event) {
+            // 影片開始播放時，取得影片總長度並計算輪播次數
+            if (event.data === 1) { // 1: YT.PlayerState.PLAYING
+                updateDurationInfo();
+            }
+
+            // 影片停止後，若未滿 1 小時則自動再開啟輪播
+            if (event.data === 0) { // 0: YT.PlayerState.ENDED
+                const elapsedMillis = Date.now() - sessionStartTime;
+                const oneHourMillis = 60 * 60 * 1000;
+                
+                if (elapsedMillis < oneHourMillis) {
+                    console.log("尚未播滿1小時，自動重新輪播該清單");
+                    document.getElementById('upload-status').innerText = "未滿1小時，自動重播中";
+                    player.playVideoAt(0); // 從第一支影片重播
+                } else {
+                    document.getElementById('upload-status').innerText = "已播滿1小時，等待關閉";
+                }
+            }
+        }
+
+        function forceTestCapture() {
+            if (!gasUrl) return alert("請先填寫 GAS URL");
+            hideConfigModal();
+            captureAndUpload("手動點擊測試截圖");
+        }
+
+        // 新增：計算並更新影片長度與預計輪播次數的函式
+        function updateDurationInfo() {
+            if (player && typeof player.getDuration === 'function') {
+                const durationSecs = Math.floor(player.getDuration());
+                if (durationSecs > 0) {
+                    const m = Math.floor(durationSecs / 60);
+                    const s = durationSecs % 60;
+                    const timeStr = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+                    
+                    let loopText = "";
+                    if (durationSecs < 3600) {
+                        const loops = Math.ceil(3600 / durationSecs);
+                        loopText = `(預計播${loops}次)`;
+                    } else {
+                        loopText = `(滿1小時)`;
+                    }
+                    
+                    document.getElementById('video-duration-info').innerText = `${timeStr} ${loopText}`;
+                }
+            }
+        }
+
+        function captureAndUpload(phaseTag) {
+            const statusEl = document.getElementById('upload-status');
+            statusEl.innerText = `擷取畫面 [${phaseTag}]...`;
+            statusEl.className = 'text-yellow-400 font-mono mt-0.5 break-words leading-tight';
+
+            html2canvas(document.getElementById('capture-region'), {
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#000000',
+                logging: false
+            }).then(canvas => {
+                // 成功擷取後，更新截圖張數計數器
+                captureCount++;
+                document.getElementById('capture-count').innerText = captureCount;
+
+                const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                uploadToCloud(imageBase64, phaseTag);
+            }).catch(err => {
+                statusEl.innerText = "截圖失敗: " + err.message;
+                statusEl.className = 'text-red-400 font-mono mt-0.5 break-words leading-tight';
+            });
+        }
+
+        function uploadToCloud(imageBase64, phaseTag) {
+            const statusEl = document.getElementById('upload-status');
+            statusEl.innerText = `上傳雲端中...`;
+
+            // 去除文字中的 [測試] 標籤，保持存檔檔名乾淨
+            const timestampText = document.getElementById('clock-display').innerText.replace(/\[.*\]\s*/, '');
+            const payload = {
+                storeName: storeName || "未命名門店",
+                slot: currentSlot,
+                timestamp: timestampText,
+                videoTitle: currentPlaylist ? currentPlaylist.title : "未知主題",
+                phaseTag: phaseTag,
+                imageBase64: imageBase64
+            };
+
+            // 移除 no-cors 以便讀取真正的錯誤訊息
+            fetch(gasUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' }, // 避免觸發預檢選項
+                body: JSON.stringify(payload)
+            }).then(response => response.json())
+            .then(data => {
+                if (data.status === "success") {
+                    statusEl.innerText = `[${phaseTag}] 傳輸完成!`;
+                    statusEl.className = 'text-green-400 font-mono mt-0.5 break-words leading-tight';
+                } else {
+                    statusEl.innerText = "雲端錯誤: " + data.message;
+                    statusEl.className = 'text-red-400 font-mono mt-0.5 break-words leading-tight';
+                }
+            }).catch(err => {
+                statusEl.innerText = "連線失敗: 網址錯誤或版本未更新";
+                statusEl.className = 'text-red-400 font-mono mt-0.5 break-words leading-tight';
+            });
+        }
+    </script>
+</body>
+</html>
