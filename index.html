@@ -525,10 +525,10 @@
                 imageBase64: imageBase64
             };
 
-            // 移除 no-cors 以便讀取真正的錯誤訊息
+            // 使用 text/plain 避免觸發預檢選項，解決 CORS 阻擋問題
             fetch(gasUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'text/plain' }, // 避免觸發預檢選項
+                headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(payload)
             }).then(response => response.json())
             .then(data => {
