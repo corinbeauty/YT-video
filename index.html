@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- 新增 Referrer 策略，避免被 YouTube 阻擋 (Error 153) -->
+    <!-- 確保 YouTube 不會因為 Referrer 阻擋 (Error 153) -->
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <title>門店內訓影音自動播放暨雲端巡檢系統 V4.1 (可拖曳/靜音版)</title>
+    <title>門店內訓影音自動播放暨雲端巡檢系統 V4.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -39,10 +39,10 @@
         /* 使浮水印框可縮放 */
         #watermark-box {
             resize: both;
-            overflow: auto; /* 改為 auto，讓縮到過小時可以捲動，避免文字破圖溢出 */
-            min-width: 120px; /* 大幅降低最小寬度 */
-            width: 150px; /* 預設改為 150px 的直條版面 */
-            min-height: 200px; /* 增加一點最小高度以容納直立排版 */
+            overflow: auto; 
+            min-width: 130px; 
+            width: 160px; /* 直條版面 */
+            min-height: 250px; 
             max-width: 90vw;
             max-height: 90vh;
         }
@@ -64,7 +64,7 @@
                 ≡ 拖曳視窗 ≡
             </div>
 
-            <!-- 改為垂直排列 (flex-col) 的狀態標籤 -->
+            <!-- 狀態標籤 -->
             <div class="flex flex-col space-y-1.5 mb-2 shrink-0">
                 <div class="flex items-center space-x-1.5">
                     <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping shrink-0"></span>
@@ -75,10 +75,25 @@
                 <span id="test-mode-badge" class="hidden bg-purple-600/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono inline-block w-fit shrink-0">測試模式</span>
             </div>
             
-            <!-- 縮小字體並保持自動換行 -->
             <h1 id="video-title" class="text-xs font-bold text-white break-words whitespace-normal shrink-0 leading-tight mb-1">正在載入播放清單...</h1>
-            <p id="clock-display" class="text-yellow-400 font-mono text-[11px] mt-1 mb-2 shrink-0 break-words leading-tight">讀取中...</p>
+            <p id="clock-display" class="text-yellow-400 font-mono text-[11px] mt-1 mb-1 shrink-0 break-words leading-tight">讀取中...</p>
             
+            <!-- 新增：即時監控數據面板 -->
+            <div class="mt-1 mb-2 text-[10px] text-gray-300 space-y-1 shrink-0 bg-black/40 p-2 rounded border border-gray-700/50">
+                <div class="flex justify-between">
+                    <span>▶ 總播放:</span>
+                    <span class="text-white font-mono"><span id="played-time">0</span> 分鐘</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>⏱ 影片:</span>
+                    <span class="text-white font-mono" id="current-video-time">00:00</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>📸 截圖:</span>
+                    <span class="text-white font-mono"><span id="capture-count">0</span> 張</span>
+                </div>
+            </div>
+
             <!-- 狀態與截圖位置說明 -->
             <div class="mt-auto border-t border-gray-700/50 pt-2 text-[10px] text-gray-400 shrink-0">
                 <div class="flex flex-col space-y-1 mb-1">
@@ -95,7 +110,7 @@
     <div id="config-modal" class="fixed inset-0 bg-black/90 backdrop-blur-lg z-[100] flex items-center justify-center p-4 hidden">
         <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh]">
             <h2 class="text-xl font-bold text-white border-b border-gray-800 pb-3 mb-4 flex justify-between items-center">
-                <span>門店系統參數設定 V4.1</span>
+                <span>門店系統參數設定 V4.2</span>
                 <span class="text-xs font-normal text-gray-500">按 ESC 可再次呼叫此選單</span>
             </h2>
             
@@ -119,7 +134,7 @@
                 <div class="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50 border-l-4 border-l-purple-500">
                     <h3 class="text-sm font-semibold text-purple-400 mb-3">測試與進階控制</h3>
                     <div class="space-y-3">
-                        <!-- 新增：測試模式專屬開關 -->
+                        <!-- 測試模式專屬開關 -->
                         <div class="flex items-center justify-between bg-gray-900 border border-gray-700 p-2 rounded-lg">
                             <label for="cfg-test-mode" class="text-xs font-medium text-purple-400 cursor-pointer select-none">啟用測試模式 (加速截圖/模擬日期)</label>
                             <input type="checkbox" id="cfg-test-mode" class="w-4 h-4 rounded bg-gray-800 border-gray-600 text-purple-500 focus:ring-purple-500 cursor-pointer">
@@ -142,7 +157,7 @@
             </div>
 
             <div class="pt-4 mt-4 border-t border-gray-800 flex justify-between items-center">
-                <button onclick="forceTestCapture()" class="text-xs text-green-400 hover:text-green-300 underline underline-offset-2">馬上測試截圖上傳(不會關閉視窗)</button>
+                <button onclick="forceTestCapture()" class="text-xs text-green-400 hover:text-green-300 underline underline-offset-2">馬上測試一鍵截圖</button>
                 <div class="flex space-x-3">
                     <button onclick="hideConfigModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">取消</button>
                     <button onclick="saveAndReload()" class="bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm px-6 py-2 rounded-lg transition shadow-lg shadow-blue-900/50">儲存並重新載入</button>
@@ -190,7 +205,10 @@
             { id: "PLCV-Y48MR1Jd7sTN6AGyVkeMmWWnFIBsX", title: "突破現狀.自我成長 下半部" },
             { id: "PLCV-Y48MR1JeOyl1b2_fP5ECaBCBNHEHd", title: "如何創造好心情 上半部" },
             { id: "PLCV-Y48MR1JfrtpJUyv3VkeAyNpnnPiyz", title: "如何創造好心情 下半部" },
-            { id: "PLCV-Y48MR1JfO6qO9chPztCeJ47eXp5ss", title: "如何提升銷售戰力 第一部第一~三集" }
+            { id: "PLCV-Y48MR1JfO6qO9chPztCeJ47eXp5ss", title: "如何提升銷售戰力 第一部第一~三集" },
+            { id: "PLCV-Y48MR1JeI-1T_RTdMFUEKpMW8dGyf", title: "如何提升銷售戰力 第一部第四集、第二部第一~二集" },
+            { id: "PLCV-Y48MR1JelWTnLOjMLMLdkjlYc3QHU", title: "如何提升銷售戰力 第二部第三~四集、第三部第一集" },
+            { id: "PLCV-Y48MR1JcbT8xfkUtkKmyV5DThX3pj", title: "如何提升銷售戰力 第三部第二~四集" }
         ];
 
         let storeName = localStorage.getItem("STORE_NAME") || "";
@@ -203,8 +221,10 @@
         let currentPlaylist;
         let currentSlot = "一般時段";
         let activePlaylists = [];
+        
+        // 追蹤數據
         let sessionStartTime = null;
-        let captureCount = 0; // 新增：紀錄截圖次數
+        let captureCount = 0;
 
         const watermarkBox = document.getElementById('watermark-box');
         const dragHandle = document.getElementById('drag-handle');
@@ -215,12 +235,12 @@
             startX = e.clientX;
             startY = e.clientY;
             
-            // 修正：使用 getBoundingClientRect 獲取實際像素位置，避免 translateY 造成跳動
+            // 使用 getBoundingClientRect 獲取實際像素位置，避免 translateY 造成跳動
             const rect = watermarkBox.getBoundingClientRect();
             initialX = rect.left;
             initialY = rect.top;
             
-            // 移除 transform，直接使用絕對位置 (px)
+            // 移除 transform，直接使用絕對位置
             watermarkBox.style.transform = 'none';
             watermarkBox.style.left = initialX + 'px';
             watermarkBox.style.top = initialY + 'px';
@@ -304,14 +324,14 @@
                 document.getElementById('clock-display').innerText = `${datePart} ${timePart}`;
             }
 
-            // 新增：更新總播放時間 (從取得 sessionStartTime 開始算)
+            // 更新總播放時間 (從取得 sessionStartTime 開始算)
             if (sessionStartTime) {
                 const elapsedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
                 const elapsedMinutes = Math.floor(elapsedSeconds / 60);
                 document.getElementById('played-time').innerText = elapsedMinutes;
             }
 
-            // 新增：更新影片目前播放進度
+            // 更新影片目前播放進度
             if (player && typeof player.getCurrentTime === 'function') {
                 const currentSecs = Math.floor(player.getCurrentTime());
                 if (!isNaN(currentSecs)) {
@@ -402,7 +422,7 @@
         }
 
         function onPlayerReady(event) {
-            // ★ 功能：播放時自動靜音
+            // 自動靜音並播放
             event.target.mute();
             event.target.playVideo();
             
@@ -410,14 +430,14 @@
             sessionStartTime = Date.now();
 
             if (isTestMode) {
-                // 測試模式排程截圖 (高頻率截圖：1, 3, 5, 10, 15分鐘)
+                // 測試模式截圖排程 (高頻率：1, 3, 5, 10, 15分鐘)
                 setTimeout(() => captureAndUpload("測試截圖_1分鐘"), 1 * 60 * 1000);
                 setTimeout(() => captureAndUpload("測試截圖_3分鐘"), 3 * 60 * 1000);
                 setTimeout(() => captureAndUpload("測試截圖_5分鐘"), 5 * 60 * 1000);
                 setTimeout(() => captureAndUpload("測試截圖_10分鐘"), 10 * 60 * 1000);
                 setTimeout(() => captureAndUpload("測試截圖_15分鐘"), 15 * 60 * 1000);
             } else {
-                // 正式環境排程截圖 (5, 30, 60分鐘)
+                // 正式環境截圖排程 (5, 30, 60分鐘)
                 setTimeout(() => captureAndUpload("截圖1_開播5分鐘"), 5 * 60 * 1000);
                 setTimeout(() => captureAndUpload("截圖2_開播30分鐘"), 30 * 60 * 1000);
                 setTimeout(() => captureAndUpload("截圖3_開播60分鐘滿時"), 60 * 60 * 1000);
@@ -428,17 +448,15 @@
         }
 
         function onPlayerStateChange(event) {
-            // ★ 功能：影片停止後，若未滿 1 小時則自動再開啟輪播
-            // 0 代表 YT.PlayerState.ENDED (播放結束)
-            if (event.data === 0) {
+            // 影片停止後，若未滿 1 小時則自動再開啟輪播
+            if (event.data === 0) { // 0: YT.PlayerState.ENDED
                 const elapsedMillis = Date.now() - sessionStartTime;
                 const oneHourMillis = 60 * 60 * 1000;
                 
                 if (elapsedMillis < oneHourMillis) {
                     console.log("尚未播滿1小時，自動重新輪播該清單");
                     document.getElementById('upload-status').innerText = "未滿1小時，自動重播中";
-                    // 重新從清單第一支影片開始播放
-                    player.playVideoAt(0);
+                    player.playVideoAt(0); // 從第一支影片重播
                 } else {
                     document.getElementById('upload-status').innerText = "已播滿1小時，等待關閉";
                 }
@@ -454,7 +472,7 @@
         function captureAndUpload(phaseTag) {
             const statusEl = document.getElementById('upload-status');
             statusEl.innerText = `擷取畫面 [${phaseTag}]...`;
-            statusEl.className = 'text-yellow-400 font-mono mt-0.5';
+            statusEl.className = 'text-yellow-400 font-mono mt-0.5 break-words leading-tight';
 
             html2canvas(document.getElementById('capture-region'), {
                 useCORS: true,
@@ -462,7 +480,7 @@
                 backgroundColor: '#000000',
                 logging: false
             }).then(canvas => {
-                // 新增：截圖成功後計數 +1 並更新畫面
+                // 成功擷取後，更新截圖張數計數器
                 captureCount++;
                 document.getElementById('capture-count').innerText = captureCount;
 
@@ -470,7 +488,7 @@
                 uploadToCloud(imageBase64, phaseTag);
             }).catch(err => {
                 statusEl.innerText = "截圖失敗: " + err.message;
-                statusEl.className = 'text-red-400 font-mono mt-0.5';
+                statusEl.className = 'text-red-400 font-mono mt-0.5 break-words leading-tight';
             });
         }
 
@@ -496,10 +514,10 @@
                 body: JSON.stringify(payload)
             }).then(() => {
                 statusEl.innerText = `[${phaseTag}] 傳輸完成!`;
-                statusEl.className = 'text-green-400 font-mono mt-0.5';
+                statusEl.className = 'text-green-400 font-mono mt-0.5 break-words leading-tight';
             }).catch(err => {
                 statusEl.innerText = "連線失敗: " + err.message;
-                statusEl.className = 'text-red-400 font-mono mt-0.5';
+                statusEl.className = 'text-red-400 font-mono mt-0.5 break-words leading-tight';
             });
         }
     </script>
