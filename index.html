@@ -364,24 +364,38 @@
                 videoTitle: document.getElementById("video-schedule").innerText
             };
 
+            // 改用 form-urlencoded 繞過 GitHub 到 GAS 的跨域預檢 (Preflight) 限制
+            let formData = new URLSearchParams();
+            formData.append('data', JSON.stringify(payload));
+
             fetch(gasUrl, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payload)
+                method: 'POST',
+                // 重要！不要用 application/json
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: formData.toString()
             })
             .then(response => response.text())
             .then(text => {
-                let res = JSON.parse(text);
-                if(res.status === "success") {
-                    screenshotCount++;
-                    document.getElementById("screenshot-count").innerText = `${screenshotCount} 張`;
-                    showLog(`[${type}] 上傳成功！已存入雲端。`, "#4CAF50");
-                } else {
-                    showLog(`[${type}] 雲端錯誤: ` + res.message, "#f44336");
+                try {
+                    let res = JSON.parse(text);
+                    if(res.status === "success") {
+                        screenshotCount++;
+                        document.getElementById("screenshot-count").innerText = `${screenshotCount} 張`;
+                        showLog(`[${type}] 上傳成功！已存入雲端。`, "#4CAF50");
+                    } else {
+                        showLog(`[${type}] 雲端錯誤: ` + res.message, "#f44336");
+                    }
+                } catch(e) {
+                     // 若回傳不是 JSON，將錯誤印出
+                     showLog(`[${type}] 回傳格式異常，請檢查 GAS 部署。`, "#f44336");
+                     console.error("解析錯誤:", text);
                 }
             })
             .catch(err => {
-                showLog(`[${type}] 連線失敗或網址未更新。`, "#f44336");
+                showLog(`[${type}] 跨域連線失敗或網址失效。`, "#f44336");
+                console.error("Fetch 錯誤:", err);
             });
         }
 
