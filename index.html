@@ -204,6 +204,7 @@
         let currentSlot = "一般時段";
         let activePlaylists = [];
         let sessionStartTime = null;
+        let captureCount = 0; // 新增：紀錄截圖次數
 
         const watermarkBox = document.getElementById('watermark-box');
         const dragHandle = document.getElementById('drag-handle');
@@ -301,6 +302,24 @@
                 document.getElementById('clock-display').innerHTML = `<span class="text-purple-400 font-bold">[測試]</span> ${datePart} ${timePart}`;
             } else {
                 document.getElementById('clock-display').innerText = `${datePart} ${timePart}`;
+            }
+
+            // 新增：更新總播放時間 (從取得 sessionStartTime 開始算)
+            if (sessionStartTime) {
+                const elapsedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+                const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+                document.getElementById('played-time').innerText = elapsedMinutes;
+            }
+
+            // 新增：更新影片目前播放進度
+            if (player && typeof player.getCurrentTime === 'function') {
+                const currentSecs = Math.floor(player.getCurrentTime());
+                if (!isNaN(currentSecs)) {
+                    const m = Math.floor(currentSecs / 60);
+                    const s = currentSecs % 60;
+                    document.getElementById('current-video-time').innerText = 
+                        String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+                }
             }
         }
 
@@ -443,6 +462,10 @@
                 backgroundColor: '#000000',
                 logging: false
             }).then(canvas => {
+                // 新增：截圖成功後計數 +1 並更新畫面
+                captureCount++;
+                document.getElementById('capture-count').innerText = captureCount;
+
                 const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
                 uploadToCloud(imageBase64, phaseTag);
             }).catch(err => {
