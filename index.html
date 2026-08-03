@@ -10,7 +10,7 @@
         
         /* 左側資訊方框 */
         #info-box {
-            position: absolute; top: 10%; left: 2%; width: 320px;
+            position: absolute; top: 10%; left: 2%; width: 340px;
             background: rgba(0, 0, 0, 0.75); color: #fff;
             padding: 20px; border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
@@ -18,7 +18,7 @@
             z-index: 9999; cursor: move;
         }
         #info-box h2 { margin: 0 0 15px 0; font-size: 22px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 5px; }
-        .info-row { margin-bottom: 10px; font-size: 16px; line-height: 1.5; }
+        .info-row { margin-bottom: 10px; font-size: 15px; line-height: 1.5; }
         .info-label { color: #aaa; font-weight: bold; }
         
         /* 狀態列 */
@@ -57,7 +57,7 @@
         <h2>📌 門店內訓巡檢系統</h2>
         <div class="info-row"><span class="info-label">🏪 門店名稱：</span><span id="store-name">讀取中...</span></div>
         <div class="info-row"><span class="info-label">📅 目前時間：</span><span id="current-time">讀取中...</span></div>
-        <div class="info-row"><span class="info-label">🎬 影片標題：</span><span id="video-title">載入中...</span></div>
+        <div class="info-row"><span class="info-label">🎬 本日排程：</span><span id="video-schedule">載入中...</span></div>
         <div class="info-row"><span class="info-label">▶ 總播放：</span><span id="total-play-time">0 分鐘</span></div>
         <div class="info-row"><span class="info-label">⏱ 影片時間：</span><span id="video-current-time">00:00</span> <span id="loop-estimate" style="color:#03A9F4; font-size:14px;"></span></div>
         <div class="info-row"><span class="info-label">📸 已截圖：</span><span id="screenshot-count">0 張</span></div>
@@ -78,6 +78,107 @@
     </div>
 
     <script>
+        // --- 07/01 ~ 09/30 播放清單資料庫 ---
+        const playlistSchedule = {
+            // 7月 (根據清單推算)
+            "07/01": { title: "讓客人說Yes !優質的銷售心法 下集", id: "PLCV-Y48MR1Jd-DqEGEVW0txYmxFOpEmGz" },
+            "07/02": { title: "敢於挑戰夢想 上集", id: "PLCV-Y48MR1JcVZKK-xxhyRIo0recmZoJT" },
+            "07/03": { title: "敢於挑戰夢想 下集", id: "PLCV-Y48MR1Je4gmZw6gGSBWXFmgTiFN4b" },
+            "07/04": { title: "態度決勝負 上集", id: "PLCV-Y48MR1JexttsFgAYwdcxvK5gJG8qZ" },
+            "07/05": { title: "態度決勝負 下集", id: "PLCV-Y48MR1JfZVCEEjgHSIQeJiutTd1SI" },
+            "07/06": { title: "成功優質生活的五Ｑ必勝法則 上集", id: "PLCV-Y48MR1JcXXO9pouB_LTAYNTp9RaVH" },
+            "07/07": { title: "成功優質生活的五Ｑ必勝法則 下集", id: "PLCV-Y48MR1JfRcSGSs76msFc7PxGyL9DZ" },
+            "07/08": { title: "現代人職場大贏家法則 上集", id: "PLCV-Y48MR1JdUTJ0O4Rj5i8fu0ptsK0vt" },
+            "07/09": { title: "現代人職場大贏家法則 下集", id: "PLCV-Y48MR1JcE6f2iHnl6NBAPI5S_aWwE" },
+            "07/10": { title: "從關係中找回生命的核心價值 上集", id: "PLCV-Y48MR1JcBJKaDWk5fQvQk4ZTWLAi8" },
+            "07/11": { title: "從關係中找回生命的核心價值 下集", id: "PLCV-Y48MR1Jd4QMf17fX30a5AJLjw25A9" },
+            "07/12": { title: "不感動也難-新時代的人際吸引力 上集", id: "PLCV-Y48MR1JeN18nT82cA3TFtKi9xx5KL" },
+            "07/13": { title: "不感動也難-新時代的人際吸引力 下集", id: "PLCV-Y48MR1JfhG7m1IgyOGyLsItrRTFgY" },
+            "07/14": { title: "揪感心的服務-好客由你來創造 上集", id: "PLCV-Y48MR1JcqLgqA4gq2c-D4fOF2uChr" },
+            "07/15": { title: "揪感心的服務-好客由你來創造 下集", id: "PLCV-Y48MR1JdsMfSKMVCSOOyuUCpm7CC3" },
+            "07/16": { title: "如何在逆境中創造優勢 上集", id: "PLCV-Y48MR1JfgoDMBcThxIgW93hqvs-v_" },
+            "07/17": { title: "如何在逆境中創造優勢 下集", id: "PLCV-Y48MR1Jf-w_hZ3mtH2C_brw9WTqzm" },
+            "07/18": { title: "好聲音溝通力-把話說好，讓溝通更有效率 上集", id: "PLCV-Y48MR1Jdb2pjUqzusMOfQby3Llq5l" },
+            "07/19": { title: "好聲音溝通力-把話說好，讓溝通更有效率 下集", id: "PLCV-Y48MR1Jfw5PaIEadYpASQSYKHFny8" },
+            "07/20": { title: "好聲音形象力-用聲音創造好形象 上集", id: "PLCV-Y48MR1Jcemhkp5LUYZRL1S539FWLL" },
+            "07/21": { title: "好聲音形象力-用聲音創造好形象 下集", id: "PLCV-Y48MR1JcgZ04uRg2yUVp4OQKTiCEW" },
+            "07/22": { title: "高獲利的銷售技能與販賣技巧 上集", id: "PLCV-Y48MR1Jfm2y2IT0xBfJstkR8ud9jJ" },
+            "07/23": { title: "高獲利的銷售技能與販賣技巧 下集", id: "PLCV-Y48MR1JcJVKDyl4yk1cVjB3dg_UOK" },
+            "07/24": { title: "超級顧客的服務管理與VIP經營 上集", id: "PLCV-Y48MR1JdLBYLz1uUDX6_lAw2XcbEt" },
+            "07/25": { title: "超級顧客的服務管理與VIP經營 下集", id: "PLCV-Y48MR1JdTwXz15k5On8GWPFpQO6mY" },
+            "07/26": { title: "最有溫度的感動行銷 上集", id: "PLCV-Y48MR1JdU7SJDKjQZfeNn7agRTM6p" },
+            "07/27": { title: "最有溫度的感動行銷 下集", id: "PLCV-Y48MR1JdDq7jp2Ia9ASq31rzDAY3z" },
+            "07/28": { title: "打動人心的顧客經營祕訣 上集", id: "PLCV-Y48MR1JdvOgifjZAZiQVx1o1mtwYo" },
+            "07/29": { title: "打動人心的顧客經營祕訣 下集", id: "PLCV-Y48MR1Jfj3zhvGDoj449HPeYWlqlW" },
+            "07/30": { title: "如何經營一個美滿的家 上半部", id: "PLCV-Y48MR1JfoPcxRduD2X6DHEs0-vHz-" },
+            "07/31": { title: "如何經營一個美滿的家 下半部", id: "PLCV-Y48MR1JfhoOu-uwe_l0L17_htAKBs" },
+            
+            // 8月 (圖片對應)
+            "08/01": { title: "如何成為卓越的上班族 上半部", id: "PLCV-Y48MR1Jdn2OHxmCDXk60S6wj7FFLb" },
+            "08/02": { title: "如何成為卓越的上班族 下半部", id: "PLCV-Y48MR1JdRXg7LtatMu_pkA26xckL_" },
+            "08/03": { title: "突破現狀.自我成長 上半部", id: "PLCV-Y48MR1JdeHiauGYq9un0r0sIjzXje" },
+            "08/04": { title: "突破現狀.自我成長 下半部", id: "PLCV-Y48MR1Jd7sTN6AGyVkeMmWWnFIBsX" },
+            "08/05": { title: "如何創造好心情 上半部", id: "PLCV-Y48MR1JeOyl1b2_fP5ECaBCBNHEHd" },
+            "08/06": { title: "如何創造好心情 下半部", id: "PLCV-Y48MR1JfrtpJUyv3VkeAyNpnnPiyz" },
+            "08/07": { title: "如何提升銷售戰力 第一部第一~三集", id: "PLCV-Y48MR1JfO6qO9chPztCeJ47eXp5ss" },
+            "08/08": { title: "如何提升銷售戰力 第一部第四集 第二部第一~二集", id: "PLCV-Y48MR1JeI-1T_RTdMFUEKpMW8dGyf" },
+            "08/09": { title: "如何提升銷售戰力 第二部第三~四集 第三部第一集", id: "PLCV-Y48MR1JelWTnLOjMLMLdkjlYc3QHU" },
+            "08/10": { title: "如何提升銷售戰力 第三部第二~四集", id: "PLCV-Y48MR1JcbT8xfkUtkKmyV5DThX3pj" },
+            "08/11": { title: "如何做好溝通與管理 上半部", id: "PLCV-Y48MR1JevkHsb0MSIcAD4Qbvpw8wu" },
+            "08/12": { title: "如何做好溝通與管理 下半部", id: "PLCV-Y48MR1JdYMHnhmYUGXSDBvJuFJsLx" },
+            "08/13": { title: "淺談愛情.婚姻.工作觀 上半部", id: "PLCV-Y48MR1JfIAqZOi6MxMsTpKEM3wFD6" },
+            "08/14": { title: "淺談愛情.婚姻.工作觀 中半部", id: "PLCV-Y48MR1JdnIaOUAuz1XrxD7duPO--R" },
+            "08/15": { title: "淺談愛情.婚姻.工作觀 下半部", id: "PLCV-Y48MR1JfWxt1d7-r8BKJ2-IrOrifI" },
+            "08/16": { title: "如何做好人際運作 上集", id: "PLCV-Y48MR1JeM9PCvM55oA61iMmwzmV2R" },
+            "08/17": { title: "如何做好人際運作 下集", id: "PLCV-Y48MR1Je9mMuZT8XkwYtkx-0MKh74" },
+            "08/18": { title: "如何把話說得更好 上集", id: "PLCV-Y48MR1JfMb8FiyJGbuqI4ujWUxwGF" },
+            "08/19": { title: "如何把話說得更好 下集", id: "PLCV-Y48MR1JeSK02btsQkVMPJBLQHC4E2" },
+            "08/20": { title: "生活有藍天 悟出希望來 上集", id: "PLCV-Y48MR1Jegjy6GVBvoPoLeyG2PToa7" },
+            "08/21": { title: "生活有藍天 悟出希望來 下集", id: "PLCV-Y48MR1JcNAQgwAGwp5OmSFnCd3zBW" },
+            "08/22": { title: "台灣諺語看人生 第一~二集", id: "PLCV-Y48MR1Jce-WgGFR5M86yc7PuKhcv_" },
+            "08/23": { title: "台灣諺語看人生 第三~四集", id: "PLCV-Y48MR1JcQt7fPrZnVsPB5SNcbM1-t" },
+            "08/24": { title: "話歲月-春花秋月何時了 第一~二集", id: "PLCV-Y48MR1JdpFos_o6_eagANUWURP7fG" },
+            "08/25": { title: "話歲月-春花秋月何時了 第三~四集", id: "PLCV-Y48MR1JdG75gEOqcNjyohKUAaY1p8" },
+            "08/26": { title: "論世事-無可奈何花落去 第一~二集", id: "PLCV-Y48MR1JckP5pjwMHJ7AhMb1uFeA7F" },
+            "08/27": { title: "論世事-無可奈何花落去 第三~四集", id: "PLCV-Y48MR1JddKSMwwkPCkl7m9Dit-Uw1" },
+            "08/28": { title: "台灣諺語論世事 第一~二集", id: "PLCV-Y48MR1Jfiw3WP9B0PTgsZwvQIM20q" },
+            "08/29": { title: "台灣諺語論世事 第三~四集", id: "PLCV-Y48MR1JcH1CVfNHhvBFZ7z2DaJbhs" },
+            "08/30": { title: "台灣諺語談理財 第一~二集", id: "PLCV-Y48MR1JdSLyqYGXRKmM6sQOXtEiJQ" },
+            "08/31": { title: "台灣諺語談理財 第三~四集", id: "PLCV-Y48MR1JejKNg_9N7MCeHzdewiJ8Kc" },
+    
+            // 9月 (圖片對應)
+            "09/01": { title: "談人生-莫使金樽空對月 第一~二集", id: "PLCV-Y48MR1JeIo0_laxp34URRFVkArEf1" },
+            "09/02": { title: "談人生-莫使金樽空對月 第三~四集", id: "PLCV-Y48MR1JcQXb4tIt3ocqvdcd5TFuSq" },
+            "09/03": { title: "說愛情-問世間情為何物 第一~二集", id: "PLCV-Y48MR1JddDxh_Hff6rUWPKvHzC9nK" },
+            "09/04": { title: "說愛情-問世間情為何物 第三~四集", id: "PLCV-Y48MR1JfCSnm_a5-1R3SiUO5Br_U2" },
+            "09/05": { title: "說服要領與抱怨處理(一)", id: "PLCV-Y48MR1Jc-Yo_MyKCAjFVdDEDWjq2l" },
+            "09/06": { title: "說服要領與抱怨處理(二)", id: "PLCV-Y48MR1JdOhzRgVUlqMD5AZagCzDsH" },
+            "09/07": { title: "說服要領與抱怨處理(三)", id: "PLCV-Y48MR1JcAYo8RXv8JOXHFkmfRVJjF" },
+            "09/08": { title: "如何提升服務品質(一)", id: "PLCV-Y48MR1JcD1gtr7UIdCsABZe1jRJqk" },
+            "09/09": { title: "如何提升服務品質(二)", id: "PLCV-Y48MR1JekyZUkbC1ls_6DwJr0JW72" },
+            "09/10": { title: "如何提升服務品質(三)", id: "PLCV-Y48MR1JdG18NQiq20lmH01fWuk5f9" },
+            "09/11": { title: "EQ與情緒管理(一)", id: "PLCV-Y48MR1JcDXEf7M964LQUnVfYf6Ga-" },
+            "09/12": { title: "EQ與情緒管理(二)", id: "PLCV-Y48MR1JcXb7UXfBOwlW--wWX-nksO" },
+            "09/13": { title: "EQ與情緒管理(三)", id: "PLCV-Y48MR1JerTwfydMUIMQ7SGZmXLkt4" },
+            "09/14": { title: "人脈成功致富學(一)", id: "PLCV-Y48MR1JcdIPszHxdAtGnDkewer9Bp" },
+            "09/15": { title: "人脈成功致富學(二)", id: "PLCV-Y48MR1JfLU8KguBbuEA1lRCDEnF1s" },
+            "09/16": { title: "人脈成功致富學(三)", id: "PLCV-Y48MR1JfuwkNqx5MV01u5rnnULy8D" },
+            "09/17": { title: "如何做一個快樂的現代人(一)", id: "PLCV-Y48MR1JedSEJ5QXuZA9Pajp2QbpPO" },
+            "09/18": { title: "如何做一個快樂的現代人(二)", id: "PLCV-Y48MR1JccZ43cRlgoB-FL6wbIEVLk" },
+            "09/19": { title: "如何做一個快樂的現代人(三)", id: "PLCV-Y48MR1JejNXjyHoxAQORWhCAdXPpA" },
+            "09/20": { title: "如何創造魅力與影響力(一)", id: "PLCV-Y48MR1JdjchNQSRMhWl0NgD1HOLzZ" },
+            "09/21": { title: "如何創造魅力與影響力(二)", id: "PLCV-Y48MR1Jfb15VhmhL1D4WYkfQb9zO1" },
+            "09/22": { title: "吸引力法則 心想事成的方法(一)", id: "PLCV-Y48MR1JfUbw5WAEbG2SEQ72Af9Ynl" },
+            "09/23": { title: "吸引力法則 心想事成的方法(二)", id: "PLCV-Y48MR1JdfS9RPqMGTLQNsvY8LbSSC" },
+            "09/24": { title: "吸引力法則 心想事成的方法(三)", id: "PLCV-Y48MR1JeDDQtS9vFXgX5sDJdxmg0-" },
+            "09/25": { title: "幽默口才成功學(一)", id: "PLCV-Y48MR1JeRrd03M5vjI61vLnaN_pzq" },
+            "09/26": { title: "幽默口才成功學(二)", id: "PLCV-Y48MR1JfGnAh4cK0cJjLvTyw7acTE" },
+            "09/27": { title: "幽默口才成功學(三)", id: "PLCV-Y48MR1JfM9VgfxgWB4yip7iF67t5k" },
+            "09/28": { title: "換個腦袋 出路無限(一)", id: "PLCV-Y48MR1JecLnd3e-wpH9UZzgbN-ihL" },
+            "09/29": { title: "換個腦袋 出路無限(二)", id: "PLCV-Y48MR1JdSSewV8mwnVn264uDiVv4v" },
+            "09/30": { title: "換個腦袋 出路無限(三)", id: "PLCV-Y48MR1JeahnPgzdFJTOezmNtUAziE" }
+        };
+
         // 預設參數 (若 localStorage 沒有資料則使用此預設值)
         const defaultStoreName = "中清店";
         const defaultGasUrl = "https://script.google.com/macros/s/AKfycbwbQo4R0S3kLX0Pc6w9xj6jdSOoWS2vEavN8xQMn77Oi8yV6uKJn7du7NKB9u10UD61/exec";
@@ -109,6 +210,26 @@
             location.reload();
         }
 
+        // 取得今日日期的 Key (例如 "08/01") - 支援 URL 參數測試 (如 ?date=08/01)
+        function getTodayKey() {
+            let params = new URLSearchParams(window.location.search);
+            if(params.has('date')) return params.get('date');
+            
+            let today = new Date();
+            let month = (today.getMonth() + 1).toString().padStart(2, '0');
+            let day = today.getDate().toString().padStart(2, '0');
+            return `${month}/${day}`;
+        }
+
+        // 決定今天要播放的清單
+        const dateKey = getTodayKey();
+        const currentPlaylistData = playlistSchedule[dateKey];
+        // 萬一超出 7~9 月範圍，則自動以 8/1 的影片作為預設防止報錯
+        const targetPlaylistId = currentPlaylistData ? currentPlaylistData.id : "PLCV-Y48MR1Jdn2OHxmCDXk60S6wj7FFLb";
+        const targetTitle = currentPlaylistData ? currentPlaylistData.title : "本日無排程(播放預設影片)";
+        
+        document.getElementById("video-schedule").innerText = `[${dateKey}] ${targetTitle}`;
+
         // 系統變數
         let player;
         let playStartTime = null;
@@ -127,8 +248,14 @@
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
-                videoId: 'jfKfPfyJRdk', // 預設 lofi hip hop 作為測試影片
-                playerVars: { 'autoplay': 1, 'controls': 0, 'loop': 1, 'mute': 0 },
+                playerVars: { 
+                    'autoplay': 1, 
+                    'controls': 0, 
+                    'loop': 1, 
+                    'mute': 0,
+                    'listType': 'playlist',
+                    'list': targetPlaylistId // 動態載入今日排程清單
+                },
                 events: {
                     'onReady': onPlayerReady,
                     'onStateChange': onPlayerStateChange
@@ -138,15 +265,16 @@
 
         function onPlayerReady(event) {
             event.target.playVideo();
-            document.getElementById("video-title").innerText = "影片讀取中...";
         }
 
         function onPlayerStateChange(event) {
             if (event.data == YT.PlayerState.PLAYING) {
                 if (!playStartTime) playStartTime = new Date().getTime();
+                
+                // 動態取得清單內目前正在播放的子影片真實標題
                 let vData = player.getVideoData();
                 if (vData && vData.title) {
-                    document.getElementById("video-title").innerText = vData.title;
+                    document.getElementById("video-schedule").innerText = `[${dateKey}] ${vData.title}`;
                 }
                 
                 // 計算預估輪播次數
@@ -203,25 +331,21 @@
             logEl.innerText = msg;
         }
 
-        // ★ 核心升級：透過擴充功能擷取實體畫面
+        // 透過擴充功能擷取實體畫面
         function takeAndUploadScreenshot(type = "自動截圖") {
             showLog(`[${type}] 呼叫外掛截圖中...`, "#03A9F4");
-            
-            // 發送指令給 content.js (擴充功能)
             window.postMessage({ type: "REQUEST_CAPTURE" }, "*");
 
-            // 設定 3 秒超時警告
             let captureTimeout = setTimeout(() => {
-                showLog(`[${type}] 截圖失敗：未偵測到 Chrome 擴充功能，請確認是否已安裝並啟用！`, "#f44336");
+                showLog(`[${type}] 截圖失敗：未偵測到 Chrome 擴充功能！`, "#f44336");
             }, 3000);
 
-            // 建立一次性的事件監聽器，接收圖片
             function captureListener(event) {
                 if (event.source !== window || !event.data) return;
 
                 if (event.data.type === "RECEIVE_CAPTURE") {
-                    clearTimeout(captureTimeout); // 取消超時警告
-                    window.removeEventListener("message", captureListener); // 移除監聽，避免重複執行
+                    clearTimeout(captureTimeout); 
+                    window.removeEventListener("message", captureListener);
 
                     let imgData = event.data.dataUrl;
                     showLog(`[${type}] 擷取成功，上傳雲端中...`, "#ffeb3b");
@@ -237,15 +361,12 @@
                 storeName: storeName,
                 time: document.getElementById("current-time").innerText,
                 type: type,
-                videoTitle: document.getElementById("video-title").innerText
+                videoTitle: document.getElementById("video-schedule").innerText
             };
 
             fetch(gasUrl, {
                 method: "POST",
-                headers: {
-                    // 重要：使用 text/plain 避免觸發 CORS 預檢請求
-                    "Content-Type": "text/plain;charset=utf-8" 
-                },
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(payload)
             })
             .then(response => response.text())
