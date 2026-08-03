@@ -84,8 +84,13 @@
                     <span class="text-white font-mono"><span id="played-time">0</span> 分鐘</span>
                 </div>
                 <div class="flex justify-between">
-                    <span>⏱ 影片:</span>
+                    <span>⏱ 播放進度:</span>
                     <span class="text-white font-mono" id="current-video-time">00:00</span>
+                </div>
+                <!-- 新增：影片長度與預計輪播次數 -->
+                <div class="flex justify-between">
+                    <span>⏳ 影片長度:</span>
+                    <span class="text-white font-mono text-[9px]" id="video-duration-info">讀取中...</span>
                 </div>
                 <div class="flex justify-between">
                     <span>📸 截圖:</span>
@@ -407,6 +412,11 @@
         }
 
         function onPlayerStateChange(event) {
+            // 影片開始播放時，取得影片總長度並計算輪播次數
+            if (event.data === 1) { // 1: YT.PlayerState.PLAYING
+                updateDurationInfo();
+            }
+
             // 影片停止後，若未滿 1 小時則自動再開啟輪播
             if (event.data === 0) { // 0: YT.PlayerState.ENDED
                 const elapsedMillis = Date.now() - sessionStartTime;
@@ -426,6 +436,28 @@
             if (!gasUrl) return alert("請先填寫 GAS URL");
             hideConfigModal();
             captureAndUpload("手動點擊測試截圖");
+        }
+
+        // 新增：計算並更新影片長度與預計輪播次數的函式
+        function updateDurationInfo() {
+            if (player && typeof player.getDuration === 'function') {
+                const durationSecs = Math.floor(player.getDuration());
+                if (durationSecs > 0) {
+                    const m = Math.floor(durationSecs / 60);
+                    const s = durationSecs % 60;
+                    const timeStr = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+                    
+                    let loopText = "";
+                    if (durationSecs < 3600) {
+                        const loops = Math.ceil(3600 / durationSecs);
+                        loopText = `(預計播${loops}次)`;
+                    } else {
+                        loopText = `(滿1小時)`;
+                    }
+                    
+                    document.getElementById('video-duration-info').innerText = `${timeStr} ${loopText}`;
+                }
+            }
         }
 
         function captureAndUpload(phaseTag) {
