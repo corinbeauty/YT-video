@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- 新增 Referrer 策略，避免被 YouTube 阻擋 (Error 153) -->
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <title>門店內訓影音自動播放暨雲端巡檢系統 V4.0 (測試支援)</title>
+    <title>門店內訓影音自動播放暨雲端巡檢系統 V4.1 (可拖曳/靜音版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -36,6 +36,15 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        /* 使浮水印框可縮放 */
+        #watermark-box {
+            resize: both;
+            overflow: hidden;
+            min-width: 350px;
+            min-height: 160px;
+            max-width: 90vw;
+            max-height: 90vh;
+        }
     </style>
 </head>
 <body class="bg-black text-white select-none">
@@ -47,24 +56,33 @@
             <div id="player"></div>
         </div>
 
-        <!-- 畫面上方動態防偽浮水印 -->
-        <div class="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none z-50">
-            <div class="bg-black/85 backdrop-blur-md border border-white/20 p-4 rounded-xl shadow-2xl max-w-xl">
-                <div class="flex items-center space-x-2 mb-1">
-                    <span class="w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
-                    <span class="font-bold text-red-400 text-xs tracking-wider uppercase">內訓播放中 (至少1小時)</span>
-                    <span id="store-display" class="bg-blue-600/80 text-white text-xs px-2 py-0.5 rounded font-mono">門店名稱未設定</span>
-                    <span id="slot-display" class="bg-emerald-600/80 text-white text-xs px-2 py-0.5 rounded font-mono">時段辨識中</span>
-                    <span id="test-mode-badge" class="hidden bg-purple-600/80 text-white text-xs px-2 py-0.5 rounded font-mono">測試模式</span>
-                </div>
-                <h1 id="video-title" class="text-base font-bold text-white truncate">正在載入播放清單...</h1>
-                <p id="clock-display" class="text-yellow-400 font-mono text-sm mt-1">讀取中...</p>
+        <!-- 畫面上方動態防偽浮水印 (現改為可拖曳、可縮放) -->
+        <div id="watermark-box" class="absolute z-50 bg-black/85 backdrop-blur-md border border-white/20 p-4 rounded-xl shadow-2xl pointer-events-auto flex flex-col" style="top: 16px; left: 16px;">
+            <!-- 拖曳把手 -->
+            <div id="drag-handle" class="w-full bg-gray-700/50 hover:bg-gray-600/80 cursor-move text-center text-[10px] text-gray-300 py-1 rounded mb-3 transition-colors">
+                ≡ 按住此處可拖曳視窗 ≡
             </div>
 
-            <!-- 右上角系統狀態證明水壓印 -->
-            <div class="bg-black/85 backdrop-blur-md border border-white/20 p-3 rounded-xl text-right">
-                <div class="text-xs text-gray-400">總部巡檢系統證明 V4.0</div>
-                <div id="upload-status" class="text-xs text-green-400 font-mono mt-0.5">系統待命中</div>
+            <div class="flex items-center space-x-2 mb-2 flex-wrap gap-y-1">
+                <span class="w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
+                <span class="font-bold text-red-400 text-xs tracking-wider uppercase">內訓播放中</span>
+                <span id="store-display" class="bg-blue-600/80 text-white text-xs px-2 py-0.5 rounded font-mono">門店未設定</span>
+                <span id="slot-display" class="bg-emerald-600/80 text-white text-xs px-2 py-0.5 rounded font-mono">時段辨識中</span>
+                <span id="test-mode-badge" class="hidden bg-purple-600/80 text-white text-xs px-2 py-0.5 rounded font-mono">測試模式</span>
+            </div>
+            
+            <h1 id="video-title" class="text-base font-bold text-white break-words">正在載入播放清單...</h1>
+            <p id="clock-display" class="text-yellow-400 font-mono text-sm mt-1 mb-2">讀取中...</p>
+            
+            <!-- 狀態與截圖位置說明 -->
+            <div class="mt-auto border-t border-gray-700/50 pt-2 text-xs text-gray-400">
+                <div class="flex justify-between items-center mb-1">
+                    <span>系統巡檢證明 V4.1</span>
+                    <span id="upload-status" class="text-green-400 font-mono">系統待命中</span>
+                </div>
+                <div class="text-[10px] text-blue-300 break-words">
+                    📁 截圖將儲存於 Google Drive: [休閒部門店內訓巡檢紀錄_V3]
+                </div>
             </div>
         </div>
     </div>
@@ -73,7 +91,7 @@
     <div id="config-modal" class="fixed inset-0 bg-black/90 backdrop-blur-lg z-[100] flex items-center justify-center p-4 hidden">
         <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh]">
             <h2 class="text-xl font-bold text-white border-b border-gray-800 pb-3 mb-4 flex justify-between items-center">
-                <span>門店系統參數設定 V4.0 (含測試功能)</span>
+                <span>門店系統參數設定 V4.1</span>
                 <span class="text-xs font-normal text-gray-500">按 ESC 可再次呼叫此選單</span>
             </h2>
             
@@ -95,7 +113,7 @@
 
                 <!-- 測試與自訂設定 -->
                 <div class="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50 border-l-4 border-l-purple-500">
-                    <h3 class="text-sm font-semibold text-purple-400 mb-3">測試與進階控制 (非必填)</h3>
+                    <h3 class="text-sm font-semibold text-purple-400 mb-3">測試與進階控制</h3>
                     <div class="space-y-3">
                         <div>
                             <label class="block text-xs font-medium text-gray-400 mb-1">強制模擬日期 (測試特定日期應播放的主題)</label>
@@ -103,13 +121,11 @@
                                 <input type="date" id="cfg-test-date" class="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
                                 <button onclick="document.getElementById('cfg-test-date').value=''" class="px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded-lg">清除(使用真實時間)</button>
                             </div>
-                            <p class="text-[10px] text-gray-500 mt-1">若設定日期，系統將無視當下時間，強制載入該日期應播的清單。</p>
                         </div>
                         
                         <div>
                             <label class="block text-xs font-medium text-gray-400 mb-1">自訂播放清單 JSON (動態更新列表)</label>
-                            <textarea id="cfg-custom-playlist" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-purple-500" placeholder='[{"id":"影片ID","title":"標題"}]'></textarea>
-                            <p class="text-[10px] text-gray-500 mt-1">若留空則使用系統內建的預設 07/01-09/30 清單。</p>
+                            <textarea id="cfg-custom-playlist" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-purple-500" placeholder='[{"id":"影片ID","title":"標題"}]'></textarea>
                         </div>
                     </div>
                 </div>
@@ -126,7 +142,6 @@
     </div>
 
     <script>
-        // 1. 預設播放清單 (若未提供自訂 JSON，則使用此預設值)
         const defaultPlaylists = [
             { id: "PLCV-Y48MR1Jd-DqEGEVW0txYmxFOpEmGz", title: "讓客人說Yes !優質的銷售心法 下集" },
             { id: "PLCV-Y48MR1JcVZKK-xxhyRIo0recmZoJT", title: "敢於挑戰夢想 上集" },
@@ -165,61 +180,7 @@
             { id: "PLCV-Y48MR1Jd7sTN6AGyVkeMmWWnFIBsX", title: "突破現狀.自我成長 下半部" },
             { id: "PLCV-Y48MR1JeOyl1b2_fP5ECaBCBNHEHd", title: "如何創造好心情 上半部" },
             { id: "PLCV-Y48MR1JfrtpJUyv3VkeAyNpnnPiyz", title: "如何創造好心情 下半部" },
-            { id: "PLCV-Y48MR1JfO6qO9chPztCeJ47eXp5ss", title: "如何提升銷售戰力 第一部第一~三集" },
-            { id: "PLCV-Y48MR1JeI-1T_RTdMFUEKpMW8dGyf", title: "如何提升銷售戰力 第一部第四集、第二部第一~二集" },
-            { id: "PLCV-Y48MR1JelWTnLOjMLMLdkjlYc3QHU", title: "如何提升銷售戰力 第二部第三~四集、第三部第一集" },
-            { id: "PLCV-Y48MR1JcbT8xfkUtkKmyV5DThX3pj", title: "如何提升銷售戰力 第三部第二~四集" },
-            { id: "PLCV-Y48MR1JevkHsb0MSIcAD4Qbvpw8wu", title: "如何做好溝通與管理 上半部" },
-            { id: "PLCV-Y48MR1JdYMHnhmYUGXSDBvJuFJsLx", title: "如何做好溝通與管理 下半部" },
-            { id: "PLCV-Y48MR1JfIAqZOi6MxMsTpKEM3wFD6", title: "淺談愛情.婚姻.工作觀 上半部" },
-            { id: "PLCV-Y48MR1JdnIaOUAuz1XrxD7duPO--R", title: "淺談愛情.婚姻.工作觀 中半部" },
-            { id: "PLCV-Y48MR1JfWxt1d7-r8BKJ2-IrOrifI", title: "淺談愛情.婚姻.工作觀 下半部" },
-            { id: "PLCV-Y48MR1JeM9PCvM55oA61iMmwzmV2R", title: "如何做好人際運作 上集" },
-            { id: "PLCV-Y48MR1Je9mMuZT8XkwYtkx-0MKh74", title: "如何做好人際運作 下集" },
-            { id: "PLCV-Y48MR1JfMb8FiyJGbuqI4ujWUxwGF", title: "如何把話說得更好 上集" },
-            { id: "PLCV-Y48MR1JeSK02btsQkVMPJBLQHC4E2", title: "如何把話說得更好 下集" },
-            { id: "PLCV-Y48MR1Jegjy6GVBvoPoLeyG2PToa7", title: "生活有藍天 悟出希望來 上集" },
-            { id: "PLCV-Y48MR1JcNAQgwAGwp5OmSFnCd3zBW", title: "生活有藍天 悟出希望來 下集" },
-            { id: "PLCV-Y48MR1Jce-WgGFR5M86yc7PuKhcv_", title: "台灣諺語看人生 第一~二集" },
-            { id: "PLCV-Y48MR1JcQt7fPrZnVsPB5SNcbM1-t", title: "台灣諺語看人生 第三~四集" },
-            { id: "PLCV-Y48MR1JdpFos_o6_eagANUWURP7fG", title: "話歲月-春花秋月何時了 第一~二集" },
-            { id: "PLCV-Y48MR1JdG75gEOqcNjyohKUAaY1p8", title: "話歲月-春花秋月何時了 第三~四集" },
-            { id: "PLCV-Y48MR1JckP5pjwMHJ7AhMb1uFeA7F", title: "論世事-無可奈何花落去 第一~二集" },
-            { id: "PLCV-Y48MR1JddKSMwwkPCkl7m9Dit-Uw1", title: "論世事-無可奈何花落去 第三~四集" },
-            { id: "PLCV-Y48MR1Jfiw3WP9B0PTgsZwvQIM20q", title: "台灣諺語論世事 第一~二集" },
-            { id: "PLCV-Y48MR1JcH1CVfNHhvBFZ7z2DaJbhs", title: "台灣諺語論世事 第三~四集" },
-            { id: "PLCV-Y48MR1JdSLyqYGXRKmM6sQOXtEiJQ", title: "台灣諺語談理財 第一~二集" },
-            { id: "PLCV-Y48MR1JejKNg_9N7MCeHzdewiJ8Kc", title: "台灣諺語談理財 第三~四集" },
-            { id: "PLCV-Y48MR1JeIo0_laxp34URRFVkArEf1", title: "談人生-莫使金樽空對月 第一~二集" },
-            { id: "PLCV-Y48MR1JcQXb4tIt3ocqvdcd5TFuSq", title: "談人生-莫使金樽空對月 第三~四集" },
-            { id: "PLCV-Y48MR1JddDxh_Hff6rUWPKvHzC9nK", title: "說愛情-問世間情為何物 第一~二集" },
-            { id: "PLCV-Y48MR1JfCSnm_a5-1R3SiUO5Br_U2", title: "說愛情-問世間情為何物 第三~四集" },
-            { id: "PLCV-Y48MR1Jc-Yo_MyKCAjFVdDEDWjq2l", title: "說服要領與抱怨處理(一)" },
-            { id: "PLCV-Y48MR1JdOhzRgVUlqMD5AZagCzDsH", title: "說服要領與抱怨處理(二)" },
-            { id: "PLCV-Y48MR1JcAYo8RXv8JOXHFkmfRVJjF", title: "說服要領與抱怨處理(三)" },
-            { id: "PLCV-Y48MR1JcD1gtr7UIdCsABZe1jRJqk", title: "如何提升服務品質(一)" },
-            { id: "PLCV-Y48MR1JekyZUkbC1ls_6DwJr0JW72", title: "如何提升服務品質(二)" },
-            { id: "PLCV-Y48MR1JdG18NQiq20lmH01fWuk5f9", title: "如何提升服務品質(三)" },
-            { id: "PLCV-Y48MR1JcDXEf7M964LQUnVfYf6Ga-", title: "EQ與情緒管理(一)" },
-            { id: "PLCV-Y48MR1JcXb7UXfBOwlW--wWX-nksO", title: "EQ與情緒管理(二)" },
-            { id: "PLCV-Y48MR1JerTwfydMUIMQ7SGZmXLkt4", title: "EQ與情緒管理(三)" },
-            { id: "PLCV-Y48MR1JcdIPszHxdAtGnDkewer9Bp", title: "人脈成功致富學(一)" },
-            { id: "PLCV-Y48MR1JfLU8KguBbuEA1lRCDEnF1s", title: "人脈成功致富學(二)" },
-            { id: "PLCV-Y48MR1JfuwkNqx5MV01u5rnnULy8D", title: "人脈成功致富學(三)" },
-            { id: "PLCV-Y48MR1JedSEJ5QXuZA9Pajp2QbpPO", title: "如何做一個快樂的現代人(一)" },
-            { id: "PLCV-Y48MR1JccZ43cRlgoB-FL6wbIEVLk", title: "如何做一個快樂的現代人(二)" },
-            { id: "PLCV-Y48MR1JejNXjyHoxAQORWhCAdXPpA", title: "如何做一個快樂的現代人(三)" },
-            { id: "PLCV-Y48MR1JdjchNQSRMhWl0NgD1HOLzZ", title: "如何創造魅力與影響力(一)" },
-            { id: "PLCV-Y48MR1Jfb15VhmhL1D4WYkfQb9zO1", title: "如何創造魅力與影響力(二)" },
-            { id: "PLCV-Y48MR1JfUbw5WAEbG2SEQ72Af9Ynl", title: "吸引力法則 心想事成的方法(一)" },
-            { id: "PLCV-Y48MR1JdfS9RPqMGTLQNsvY8LbSSC", title: "吸引力法則 心想事成的方法(二)" },
-            { id: "PLCV-Y48MR1JeDDQtS9vFXgX5sDJdxmg0-", title: "吸引力法則 心想事成的方法(三)" },
-            { id: "PLCV-Y48MR1JeRrd03M5vjI61vLnaN_pzq", title: "幽默口才成功學(一)" },
-            { id: "PLCV-Y48MR1JfGnAh4cK0cJjLvTyw7acTE", title: "幽默口才成功學(二)" },
-            { id: "PLCV-Y48MR1JfM9VgfxgWB4yip7iF67t5k", title: "幽默口才成功學(三)" },
-            { id: "PLCV-Y48MR1JecLnd3e-wpH9UZzgbN-ihL", title: "換個腦袋 出路無限(一)" },
-            { id: "PLCV-Y48MR1JdSSewV8mwnVn264uDiVv4v", title: "換個腦袋 出路無限(二)" },
-            { id: "PLCV-Y48MR1JeahnPgzdFJTOezmNtUAziE", title: "換個腦袋 出路無限(三)" }
+            { id: "PLCV-Y48MR1JfO6qO9chPztCeJ47eXp5ss", title: "如何提升銷售戰力 第一部第一~三集" }
         ];
 
         let storeName = localStorage.getItem("STORE_NAME") || "";
@@ -231,13 +192,41 @@
         let currentPlaylist;
         let currentSlot = "一般時段";
         let activePlaylists = [];
+        let sessionStartTime = null;
+
+        const watermarkBox = document.getElementById('watermark-box');
+        const dragHandle = document.getElementById('drag-handle');
+        let isDragging = false, startX, startY, initialX, initialY;
+
+        dragHandle.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            initialX = watermarkBox.offsetLeft;
+            initialY = watermarkBox.offsetTop;
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+        });
+
+        function drag(e) {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            watermarkBox.style.left = initialX + dx + 'px';
+            watermarkBox.style.top = initialY + dy + 'px';
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
 
         window.addEventListener('DOMContentLoaded', () => {
-            // 解析播放清單
             try {
                 activePlaylists = customPlaylistStr ? JSON.parse(customPlaylistStr) : defaultPlaylists;
             } catch (e) {
-                console.error("自訂清單解析失敗，使用預設", e);
+                console.error("自訂清單解析失敗", e);
                 activePlaylists = defaultPlaylists;
             }
 
@@ -251,18 +240,15 @@
             setInterval(updateClock, 1000);
             updateClock();
 
-            // 監聽鍵盤 Esc 開啟設定
             window.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') showConfigModal();
             });
             
-            // 若未載入 YT API，則手動觸發（首次開啟時）
             if (storeName && gasUrl && !document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
                 loadYouTubeAPI();
             }
         });
 
-        // 辨識目前屬於哪個規定播放時段，支援測試模式覆蓋
         function detectTimeSlot() {
             if (testDateStr) {
                 document.getElementById('test-mode-badge').classList.remove('hidden');
@@ -283,29 +269,23 @@
             document.getElementById('slot-display').innerText = currentSlot;
         }
 
-        // 更新畫面上的時鐘
         function updateClock() {
-            // 如果有設定測試日期，時鐘前半段顯示測試日期，後半段顯示當前真實時間
             const now = new Date();
             const timePart = String(now.getHours()).padStart(2, '0') + ':' +
                              String(now.getMinutes()).padStart(2, '0') + ':' +
                              String(now.getSeconds()).padStart(2, '0');
                              
-            let datePart;
+            let datePart = testDateStr ? testDateStr : (now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0'));
+            
             if (testDateStr) {
-                // 測試模式下顯示假日期
-                datePart = testDateStr;
-                document.getElementById('clock-display').innerHTML = `<span class="text-purple-400 font-bold">[模擬日期]</span> ${datePart} ${timePart}`;
+                document.getElementById('clock-display').innerHTML = `<span class="text-purple-400 font-bold">[模擬]</span> ${datePart} ${timePart}`;
             } else {
-                datePart = now.getFullYear() + '-' +
-                           String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                           String(now.getDate()).padStart(2, '0');
                 document.getElementById('clock-display').innerText = `${datePart} ${timePart}`;
             }
         }
 
         function updateStoreDisplay() {
-            document.getElementById('store-display').innerText = storeName || "門店名稱未設定";
+            document.getElementById('store-display').innerText = storeName || "門店未設定";
         }
 
         function showConfigModal() {
@@ -326,45 +306,26 @@
             testDateStr = document.getElementById('cfg-test-date').value;
             customPlaylistStr = document.getElementById('cfg-custom-playlist').value.trim();
             
-            // 驗證 JSON 格式
             if (customPlaylistStr) {
-                try {
-                    JSON.parse(customPlaylistStr);
-                } catch (e) {
-                    alert("自訂播放清單的 JSON 格式錯誤，請檢查後再存檔！");
-                    return;
-                }
+                try { JSON.parse(customPlaylistStr); } 
+                catch (e) { alert("JSON 格式錯誤！"); return; }
             }
 
             localStorage.setItem("STORE_NAME", storeName);
             localStorage.setItem("GAS_URL", gasUrl);
             localStorage.setItem("TEST_DATE", testDateStr);
             localStorage.setItem("CUSTOM_PLAYLIST", customPlaylistStr);
-            
-            // 直接重新整理頁面以套用所有新設定與新時間
             window.location.reload();
         }
 
-        // 3. 計算當天應播項目 (支援測試日期)
         function getTargetPlaylist() {
-            // 若有測試日期，以此計算
-            let targetDate = new Date();
-            if (testDateStr) {
-                targetDate = new Date(testDateStr);
-            }
-            
+            let targetDate = testDateStr ? new Date(testDateStr) : new Date();
             const startOfYear = new Date(targetDate.getFullYear(), 0, 0);
             const diff = targetDate - startOfYear;
-            const oneDay = 1000 * 60 * 60 * 24;
-            const dayOfYear = Math.floor(diff / oneDay);
+            const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
             
-            // 防錯處理：如果列表為空
-            if (!activePlaylists || activePlaylists.length === 0) {
-                return { id: "", title: "清單為空，請檢查設定" };
-            }
-            
-            const index = dayOfYear % activePlaylists.length;
-            return activePlaylists[index];
+            if (!activePlaylists || activePlaylists.length === 0) return { id: "", title: "清單為空" };
+            return activePlaylists[dayOfYear % activePlaylists.length];
         }
 
         function loadYouTubeAPI() {
@@ -378,14 +339,9 @@
             currentPlaylist = getTargetPlaylist();
             document.getElementById('video-title').innerText = currentPlaylist.title;
 
-            // 若 ID 為空，則不載入播放器
-            if (!currentPlaylist.id) {
-                document.getElementById('video-title').innerText += " (找不到有效影片ID)";
-                return;
-            }
+            if (!currentPlaylist.id) return;
 
             player = new YT.Player('player', {
-                // 改用無 Cookie 網域，可解決本地端 file:// 憑證不足問題
                 host: 'https://www.youtube-nocookie.com',
                 playerVars: {
                     'listType': 'playlist',
@@ -393,79 +349,83 @@
                     'autoplay': 1,
                     'controls': 1,
                     'rel': 0,
-                    // 強制帶入偽裝的 origin，繞過 Error 153 檢查
                     'origin': 'https://www.youtube.com'
                 },
                 events: {
                     'onReady': onPlayerReady,
-                    'onError': onPlayerError
+                    'onStateChange': onPlayerStateChange,
+                    'onError': (e) => console.error("YT Error", e.data)
                 }
             });
         }
-        
-        function onPlayerError(event) {
-            console.error("YouTube 播放器發生錯誤", event.data);
-            document.getElementById('upload-status').innerText = `播放器載入失敗 (代碼: ${event.data})`;
-        }
 
         function onPlayerReady(event) {
+            // ★ 功能：播放時自動靜音
+            event.target.mute();
             event.target.playVideo();
+            
+            // 記錄本次開啟任務的起始時間
+            sessionStartTime = Date.now();
 
-            // 若在測試模式，則不啟用 1 小時後自動關閉，避免影響測試
             if (!testDateStr) {
-                // 每時段自動拍攝 3 張巡檢證明截圖
+                // 排程截圖 (功能：截圖功能開啟)
                 setTimeout(() => captureAndUpload("截圖1_開播5分鐘"), 5 * 60 * 1000);
                 setTimeout(() => captureAndUpload("截圖2_開播30分鐘"), 30 * 60 * 1000);
                 setTimeout(() => captureAndUpload("截圖3_開播60分鐘滿時"), 60 * 60 * 1000);
 
-                // 確保播放時間至少 1 小時 (設定為 65 分鐘後關閉)
-                setTimeout(() => {
-                    window.close();
-                }, 65 * 60 * 1000);
-            } else {
-                document.getElementById('upload-status').innerText = "測試模式中，暫停自動關閉與排程截圖";
+                // 總時長限制：65 分鐘後自動關閉整個網頁
+                setTimeout(() => window.close(), 65 * 60 * 1000);
             }
         }
 
-        // 提供給設定面板的「馬上測試截圖」按鈕呼叫
-        function forceTestCapture() {
-            if (!gasUrl) {
-                alert("請先填寫並儲存 GAS URL 才能測試！");
-                return;
+        function onPlayerStateChange(event) {
+            // ★ 功能：影片停止後，若未滿 1 小時則自動再開啟輪播
+            // 0 代表 YT.PlayerState.ENDED (播放結束)
+            if (event.data === 0) {
+                const elapsedMillis = Date.now() - sessionStartTime;
+                const oneHourMillis = 60 * 60 * 1000;
+                
+                if (elapsedMillis < oneHourMillis) {
+                    console.log("尚未播滿1小時，自動重新輪播該清單");
+                    document.getElementById('upload-status').innerText = "未滿1小時，自動重播中";
+                    // 重新從清單第一支影片開始播放
+                    player.playVideoAt(0);
+                } else {
+                    document.getElementById('upload-status').innerText = "已播滿1小時，等待關閉";
+                }
             }
+        }
+
+        function forceTestCapture() {
+            if (!gasUrl) return alert("請先填寫 GAS URL");
             hideConfigModal();
             captureAndUpload("手動點擊測試截圖");
         }
 
-        // 5. 自動截圖與傳輸引擎
         function captureAndUpload(phaseTag) {
             const statusEl = document.getElementById('upload-status');
-            statusEl.innerText = `正在擷取畫面 [${phaseTag}]...`;
-            statusEl.classList.remove('text-green-400');
-            statusEl.classList.add('text-yellow-400');
+            statusEl.innerText = `擷取畫面 [${phaseTag}]...`;
+            statusEl.className = 'text-yellow-400 font-mono mt-0.5';
 
-            // 使用 html2canvas 截圖
             html2canvas(document.getElementById('capture-region'), {
-                useCORS: true,       // 允許跨域圖片 (YouTube iframe 其實截不到內部，但浮水印截得到，背景會是黑的，已足夠證明)
+                useCORS: true,
                 allowTaint: true,
                 backgroundColor: '#000000',
-                logging: false       // 關閉終端機日誌
+                logging: false
             }).then(canvas => {
-                const imageBase64 = canvas.toDataURL('image/jpeg', 0.8); // 壓縮成 JPG，品質 0.8 以加快傳輸
+                const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
                 uploadToCloud(imageBase64, phaseTag);
             }).catch(err => {
-                statusEl.innerText = "截圖引擎失敗: " + err.message;
-                statusEl.classList.add('text-red-400');
+                statusEl.innerText = "截圖失敗: " + err.message;
+                statusEl.className = 'text-red-400 font-mono mt-0.5';
             });
         }
 
         function uploadToCloud(imageBase64, phaseTag) {
             const statusEl = document.getElementById('upload-status');
-            statusEl.innerText = `正在上傳雲端...`;
+            statusEl.innerText = `上傳雲端中...`;
 
-            // 確保擷取的是畫面上顯示的時間 (包含假時間)
-            const timestampText = document.getElementById('clock-display').innerText.replace('[模擬日期] ', '');
-
+            const timestampText = document.getElementById('clock-display').innerText.replace('[模擬] ', '');
             const payload = {
                 storeName: storeName || "未命名門店",
                 slot: currentSlot,
@@ -477,19 +437,15 @@
 
             fetch(gasUrl, {
                 method: 'POST',
-                mode: 'no-cors', // 重要：因為跨域，GAS 回傳的 JSON 瀏覽器收不到，但請求確實發出了
-                headers: {
-                    'Content-Type': 'text/plain' // 使用 text/plain 避免 preflight 請求問題
-                },
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(payload)
             }).then(() => {
-                // 因 no-cors 永遠會走到 then，即便 GAS 有錯
-                statusEl.innerText = `[${phaseTag}] 傳輸請求已發出!`;
-                statusEl.classList.remove('text-yellow-400');
-                statusEl.classList.add('text-green-400');
+                statusEl.innerText = `[${phaseTag}] 傳輸完成!`;
+                statusEl.className = 'text-green-400 font-mono mt-0.5';
             }).catch(err => {
                 statusEl.innerText = "連線失敗: " + err.message;
-                statusEl.classList.add('text-red-400');
+                statusEl.className = 'text-red-400 font-mono mt-0.5';
             });
         }
     </script>
