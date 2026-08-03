@@ -213,6 +213,14 @@
         // 追蹤數據
         let sessionStartTime = null;
         let captureCount = 0;
+        
+        // 防休眠：記錄各階段截圖是否已完成
+        let capturedPhases = {
+            15: false,
+            60: false,
+            120: false,
+            300: false
+        };
 
         const watermarkBox = document.getElementById('watermark-box');
         const dragHandle = document.getElementById('drag-handle');
@@ -304,13 +312,38 @@
 
             // 更新總播放時間 (從取得 sessionStartTime 開始算)
             if (sessionStartTime) {
-                const elapsedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+                const elapsedMillis = Date.now() - sessionStartTime;
+                const elapsedSeconds = Math.floor(elapsedMillis / 1000);
                 const elapsedMinutes = Math.floor(elapsedSeconds / 60);
                 document.getElementById('played-time').innerText = elapsedMinutes;
+                
+                // 防休眠截圖引擎：比對真實時間戳，避免瀏覽器背景節能導致漏截圖
+                if (elapsedSeconds >= 15 && !capturedPhases[15]) {
+                    capturedPhases[15] = true;
+                    captureAndUpload("截圖1_15秒");
+                }
+                if (elapsedSeconds >= 60 && !capturedPhases[60]) {
+                    capturedPhases[60] = true;
+                    captureAndUpload("截圖2_1分鐘");
+                }
+                if (elapsedSeconds >= 120 && !capturedPhases[120]) {
+                    capturedPhases[120] = true;
+                    captureAndUpload("截圖3_2分鐘");
+                }
+                if (elapsedSeconds >= 300 && !capturedPhases[300]) {
+                    capturedPhases[300] = true;
+                    captureAndUpload("截圖4_5分鐘");
+                }
             }
 
-            // 更新影片目前播放進度
-            if (player && typeof player.getCurrentTime === 'function') {
+            // 防休眠機制：如果影片被瀏覽器偷偷暫停 (State == 2)，強制喚醒播放
+            if (player && typeof player.getPlayerState === 'function') {
+                if (player.getPlayerState() === 2) {
+                    console.log("偵測到背景休眠暫停，強制喚醒...");
+                    player.playVideo();
+                }
+                
+                // 更新影片目前播放進度
                 const currentSecs = Math.floor(player.getCurrentTime());
                 if (!isNaN(currentSecs)) {
                     const m = Math.floor(currentSecs / 60);
@@ -398,14 +431,8 @@
             event.target.mute();
             event.target.playVideo();
             
-            // 記錄本次開啟任務的起始時間
+            // 記錄本次開啟任務的起始時間，啟動防休眠截圖引擎
             sessionStartTime = Date.now();
-
-            // 截圖排程：15秒、1分鐘、2分鐘、5分鐘
-            setTimeout(() => captureAndUpload("截圖1_15秒"), 15 * 1000);
-            setTimeout(() => captureAndUpload("截圖2_1分鐘"), 1 * 60 * 1000);
-            setTimeout(() => captureAndUpload("截圖3_2分鐘"), 2 * 60 * 1000);
-            setTimeout(() => captureAndUpload("截圖4_5分鐘"), 5 * 60 * 1000);
 
             // 總時長限制：65 分鐘後自動關閉整個網頁
             setTimeout(() => window.close(), 65 * 60 * 1000);
@@ -498,16 +525,22 @@
                 imageBase64: imageBase64
             };
 
+            // 移除 no-cors 以便讀取真正的錯誤訊息
             fetch(gasUrl, {
                 method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'text/plain' },
+                headers: { 'Content-Type': 'text/plain' }, // 避免觸發預檢選項
                 body: JSON.stringify(payload)
-            }).then(() => {
-                statusEl.innerText = `[${phaseTag}] 傳輸完成!`;
-                statusEl.className = 'text-green-400 font-mono mt-0.5 break-words leading-tight';
+            }).then(response => response.json())
+            .then(data => {
+                if (data.status === "success") {
+                    statusEl.innerText = `[${phaseTag}] 傳輸完成!`;
+                    statusEl.className = 'text-green-400 font-mono mt-0.5 break-words leading-tight';
+                } else {
+                    statusEl.innerText = "雲端錯誤: " + data.message;
+                    statusEl.className = 'text-red-400 font-mono mt-0.5 break-words leading-tight';
+                }
             }).catch(err => {
-                statusEl.innerText = "連線失敗: " + err.message;
+                statusEl.innerText = "連線失敗: 網址錯誤或版本未更新";
                 statusEl.className = 'text-red-400 font-mono mt-0.5 break-words leading-tight';
             });
         }
