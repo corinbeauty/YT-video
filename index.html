@@ -40,8 +40,9 @@
         #watermark-box {
             resize: both;
             overflow: auto; /* 改為 auto，讓縮到過小時可以捲動，避免文字破圖溢出 */
-            min-width: 220px; /* 降低最小寬度，讓您可以縮得更小 */
-            min-height: 140px; /* 降低最小高度 */
+            min-width: 120px; /* 大幅降低最小寬度 */
+            width: 150px; /* 預設改為 150px 的直條版面 */
+            min-height: 200px; /* 增加一點最小高度以容納直立排版 */
             max-width: 90vw;
             max-height: 90vh;
         }
@@ -56,33 +57,35 @@
             <div id="player"></div>
         </div>
 
-        <!-- 畫面上方動態防偽浮水印 (現改為可拖曳、可縮放) -->
-        <div id="watermark-box" class="absolute z-50 bg-black/85 backdrop-blur-md border border-white/20 p-4 rounded-xl shadow-2xl pointer-events-auto flex flex-col" style="top: 16px; left: 16px;">
+        <!-- 畫面上方動態防偽浮水印 (直條版面、大幅縮小尺寸) -->
+        <div id="watermark-box" class="absolute z-50 bg-black/85 backdrop-blur-md border border-white/20 p-2.5 rounded-xl shadow-2xl pointer-events-auto flex flex-col" style="top: 16px; left: 16px;">
             <!-- 拖曳把手 -->
-            <div id="drag-handle" class="w-full bg-gray-700/50 hover:bg-gray-600/80 cursor-move text-center text-[10px] text-gray-300 py-1 rounded mb-3 transition-colors shrink-0">
-                ≡ 按住此處可拖曳視窗 ≡
+            <div id="drag-handle" class="w-full bg-gray-700/50 hover:bg-gray-600/80 cursor-move text-center text-[9px] text-gray-300 py-1 rounded mb-2 transition-colors shrink-0">
+                ≡ 拖曳視窗 ≡
             </div>
 
-            <div class="flex items-center space-x-2 mb-2 flex-wrap gap-y-1 shrink-0">
-                <span class="w-3 h-3 bg-red-500 rounded-full animate-ping shrink-0"></span>
-                <span class="font-bold text-red-400 text-xs tracking-wider uppercase shrink-0">內訓播放中</span>
-                <span id="store-display" class="bg-blue-600/80 text-white text-xs px-2 py-0.5 rounded font-mono shrink-0">門店未設定</span>
-                <span id="slot-display" class="bg-emerald-600/80 text-white text-xs px-2 py-0.5 rounded font-mono shrink-0">時段辨識中</span>
-                <span id="test-mode-badge" class="hidden bg-purple-600/80 text-white text-xs px-2 py-0.5 rounded font-mono shrink-0">測試模式</span>
+            <!-- 改為垂直排列 (flex-col) 的狀態標籤 -->
+            <div class="flex flex-col space-y-1.5 mb-2 shrink-0">
+                <div class="flex items-center space-x-1.5">
+                    <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping shrink-0"></span>
+                    <span class="font-bold text-red-400 text-[10px] tracking-wider uppercase shrink-0">內訓中</span>
+                </div>
+                <span id="store-display" class="bg-blue-600/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono inline-block w-fit shrink-0">門店未設定</span>
+                <span id="slot-display" class="bg-emerald-600/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono inline-block w-fit shrink-0">時段辨識中</span>
+                <span id="test-mode-badge" class="hidden bg-purple-600/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono inline-block w-fit shrink-0">測試模式</span>
             </div>
             
-            <!-- 加入 whitespace-normal 與 break-words 確保文字在縮小時會自動換行 -->
-            <h1 id="video-title" class="text-base font-bold text-white break-words whitespace-normal shrink-0">正在載入播放清單...</h1>
-            <p id="clock-display" class="text-yellow-400 font-mono text-sm mt-1 mb-2 shrink-0">讀取中...</p>
+            <!-- 縮小字體並保持自動換行 -->
+            <h1 id="video-title" class="text-xs font-bold text-white break-words whitespace-normal shrink-0 leading-tight mb-1">正在載入播放清單...</h1>
+            <p id="clock-display" class="text-yellow-400 font-mono text-[11px] mt-1 mb-2 shrink-0 break-words leading-tight">讀取中...</p>
             
             <!-- 狀態與截圖位置說明 -->
-            <div class="mt-auto border-t border-gray-700/50 pt-2 text-xs text-gray-400 shrink-0">
-                <!-- 移除了原本的「系統巡檢證明 V4.1」文字 -->
-                <div class="flex justify-start items-center mb-1">
-                    <span id="upload-status" class="text-green-400 font-mono">系統待命中</span>
+            <div class="mt-auto border-t border-gray-700/50 pt-2 text-[10px] text-gray-400 shrink-0">
+                <div class="flex flex-col space-y-1 mb-1">
+                    <span id="upload-status" class="text-green-400 font-mono break-words leading-tight">系統待命</span>
                 </div>
-                <div class="text-[10px] text-blue-300 break-words whitespace-normal">
-                    📁 截圖將儲存於 Google Drive: [休閒部門店內訓巡檢紀錄_V3]
+                <div class="text-[9px] text-blue-300 break-words whitespace-normal leading-tight">
+                    📁 截圖儲存至: [休閒部門店內訓巡檢紀錄_V3]
                 </div>
             </div>
         </div>
