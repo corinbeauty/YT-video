@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "門店巡檢實體截圖系統",
+  "version": "1.0",
+  "description": "與 GitHub 網頁端通訊，擷取螢幕真實畫面並自動上傳",
+  "permissions": [
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
