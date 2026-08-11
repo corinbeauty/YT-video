@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "門店巡檢實體截圖系統",
-  "version": "1.0",
-  "description": "與 GitHub 網頁端通訊，擷取螢幕真實畫面並自動上傳",
+  "version": "1.2",
+  "description": "支援背景截圖與視窗自動放大縮小功能",
   "permissions": [
     "activeTab",
-    "tabs"
+    "tabs",
+    "windows" 
   ],
   "host_permissions": [
     "<all_urls>"
