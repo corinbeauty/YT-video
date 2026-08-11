@@ -3,43 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>門店內訓自動播放系統</title>
+    <title>門店內訓自動播放與視窗排程系統</title>
     <style>
         body { margin: 0; padding: 0; background-color: #000; overflow: hidden; font-family: '微軟正黑體', sans-serif; }
         #player { width: 100vw; height: 100vh; pointer-events: none; }
         
-        /* 左側資訊方框 - 輕量縮放版 */
+        /* 輕量化彈性資訊方框 */
         #info-box {
-            position: absolute; top: 5%; left: 1%; 
-            /* 將 min-width 下修為 140px (原本 200px 的 70%)，解除縮小限制 */
-            width: auto; min-width: 140px; max-width: 50%;
+            position: absolute; top: 10%; left: 2%; 
             background: rgba(0, 0, 0, 0.75); color: #fff;
-            padding: 10px; border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            padding: 15px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.2);
             z-index: 9999; cursor: move;
-            resize: both; overflow: hidden; 
-            min-height: 120px;
+            min-width: 140px; max-width: 50%; width: auto; 
+            resize: both; overflow: hidden; /* 支援自由縮放 */
         }
-        #info-box h2 { margin: 0 0 5px 0; font-size: 14px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 3px; }
+        #info-box h2 { margin: 0 0 10px 0; font-size: 16px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 5px; }
         
-        /* Flexbox 彈性排版，文字自動整齊換行 */
-        .info-row { display: flex; align-items: flex-start; margin-bottom: 5px; font-size: 11.5px; line-height: 1.5; }
-        .info-label { color: #aaa; font-weight: bold; flex-shrink: 0; white-space: nowrap; }
-        .info-value { flex-grow: 1; overflow-wrap: break-word; word-break: break-all; }
+        /* Flexbox 排版：確保文字不會跑到圖示底下 */
+        .info-row { display: flex; margin-bottom: 6px; font-size: 13px; line-height: 1.4; }
+        .info-label { color: #aaa; font-weight: bold; white-space: nowrap; margin-right: 5px; }
+        .info-value { flex: 1; word-break: break-all; }
         
         /* 狀態列 */
         #status-log {
-            margin-top: 5px; padding: 5px; background: rgba(255,255,255,0.1);
-            border-radius: 4px; font-size: 10px; min-height: 15px; color: #ffeb3b;
-            word-wrap: break-word;
+            margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.1);
+            border-radius: 6px; font-size: 12px; min-height: 20px; color: #ffeb3b;
         }
         
-        /* 測試按鈕 (預設隱藏) */
+        /* 手動測試按鈕 (預設隱藏) */
         #test-btn {
-            display: none; margin-top: 8px; width: 100%; padding: 5px;
+            display: none; 
+            margin-top: 10px; width: 100%; padding: 8px;
             background: #2196F3; color: white; border: none;
-            border-radius: 4px; cursor: pointer; font-size: 12px;
+            border-radius: 6px; cursor: pointer; font-size: 14px;
         }
         #test-btn:hover { background: #1976D2; }
 
@@ -47,48 +45,59 @@
         #settings-modal {
             display: none; position: fixed; top: 50%; left: 50%;
             transform: translate(-50%, -50%); background: #222;
-            padding: 30px; border-radius: 10px; color: white;
-            z-index: 10000; width: 400px; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            padding: 25px; border-radius: 10px; color: white;
+            z-index: 10000; width: 360px; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            max-height: 90vh; overflow-y: auto;
         }
         .modal-input { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; }
-        .modal-btn { background: #4CAF50; color: white; border: none; padding: 10px 20px; cursor: pointer; width: 100%; }
+        .modal-btn { background: #4CAF50; color: white; border: none; padding: 10px 20px; cursor: pointer; width: 100%; font-size: 16px; }
         #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; }
     </style>
 </head>
 <body>
 
+    <!-- YouTube 播放器容器 -->
     <div id="player"></div>
 
+    <!-- 左側資訊方框 -->
     <div id="info-box">
-        <h2>📌 門店內訓巡檢系統</h2>
-        <div class="info-row"><span class="info-label">🏪 </span><span class="info-value" id="store-name">讀取中...</span></div>
-        <div class="info-row"><span class="info-label">📅 </span><span class="info-value" id="current-time">讀取中...</span></div>
-        <div class="info-row"><span class="info-label">🎬 </span><span class="info-value" id="video-schedule">載入中...</span></div>
-        <div class="info-row"><span class="info-label">⏰ 下次：</span><span class="info-value" id="next-schedule-time" style="color: #FF9800;">計算中...</span></div>
-        <div class="info-row"><span class="info-label">📺 預告：</span><span class="info-value" id="next-video-title" style="color: #FF9800;">計算中...</span></div>
-        <div class="info-row"><span class="info-label">▶ 總播：</span><span class="info-value" id="total-play-time">0 分鐘</span></div>
-        <div class="info-row"><span class="info-label">⏱ 進度：</span><span class="info-value"><span id="video-current-time">00:00</span> <span id="loop-estimate" style="color:#03A9F4;"></span></span></div>
-        <div class="info-row"><span class="info-label">📸 截圖：</span><span class="info-value" id="screenshot-count">0 張</span></div>
-        <div id="status-log">系統初始化中...</div>
+        <h2>📌 門店自動巡檢</h2>
+        <div class="info-row"><div class="info-label">🏪 門店：</div><div class="info-value" id="store-name">讀取中...</div></div>
+        <div class="info-row"><div class="info-label">📅 目前：</div><div class="info-value" id="current-time">讀取中...</div></div>
+        <div class="info-row"><div class="info-label">⏰ 下次：</div><div class="info-value" id="next-schedule-time" style="color:#FF9800;">計算中...</div></div>
+        <div class="info-row"><div class="info-label">🎬 排程：</div><div class="info-value" id="video-schedule">載入中...</div></div>
+        <div class="info-row"><div class="info-label">▶ 已播：</div><div class="info-value" id="total-play-time">0 分鐘</div></div>
+        <div class="info-row"><div class="info-label">⏱ 影片：</div><div class="info-value"><span id="video-current-time">00:00</span> <span id="loop-estimate" style="color:#03A9F4; font-size:12px;"></span></div></div>
+        <div class="info-row"><div class="info-label">📸 截圖：</div><div class="info-value" id="screenshot-count">0 張</div></div>
+        <div id="status-log">等待排程啟動...</div>
         <button id="test-btn" onclick="takeAndUploadScreenshot('手動測試')">馬上測試一鍵截圖</button>
     </div>
 
+    <!-- 設定視窗 -->
     <div id="overlay"></div>
     <div id="settings-modal">
-        <h3 style="margin-top:0; border-bottom: 1px solid #444; padding-bottom: 10px;">⚙️ 系統設定</h3>
+        <h3 style="margin-top:0; border-bottom: 1px solid #444; padding-bottom: 10px;">⚙️ 系統進階設定</h3>
         <label>門店名稱：</label>
         <input type="text" id="input-store-name" class="modal-input" placeholder="例如：中清店">
-        <label>GAS 接收端 URL：</label>
+        
+        <label>接收端 Google API (GAS) URL：</label>
         <input type="text" id="input-gas-url" class="modal-input" placeholder="貼上 /exec 結尾的網址">
-        <label>每日排程時間 (逗號分隔，24小時制)：</label>
-        <input type="text" id="input-play-times" class="modal-input" placeholder="12:00, 18:00, 00:00">
-        <label>自動停止播放時間 (分鐘)：</label>
-        <input type="number" id="input-stop-minutes" class="modal-input" placeholder="60">
+        
+        <label>每日開播時間 (HH:mm, 逗號分隔)：</label>
+        <input type="text" id="input-play-times" class="modal-input" placeholder="例如：12:00, 18:00, 00:00">
+        
+        <label>截圖排程秒數 (逗號分隔)：</label>
+        <input type="text" id="input-capture-times" class="modal-input" placeholder="例如：15, 60, 120, 300">
+        
+        <label>滿時自動停止並縮小 (分鐘)：</label>
+        <input type="number" id="input-stop-time" class="modal-input" placeholder="例如：30">
+
         <button class="modal-btn" onclick="saveSettings()">儲存並重新載入</button>
+        <button class="modal-btn" onclick="closeSettings()" style="background:#666; margin-top:10px;">取消關閉</button>
     </div>
 
     <script>
-        // --- 日期與播放清單資料庫 (07/01 ~ 09/30) ---
+        // --- 07/01 ~ 09/30 播放清單資料庫 ---
         const playlistSchedule = {
             "07/01": { title: "讓客人說Yes !優質的銷售心法 下集", id: "PLCV-Y48MR1Jd-DqEGEVW0txYmxFOpEmGz" },
             "07/02": { title: "敢於挑戰夢想 上集", id: "PLCV-Y48MR1JcVZKK-xxhyRIo0recmZoJT" },
@@ -122,6 +131,7 @@
             "07/30": { title: "如何經營一個美滿的家 上半部", id: "PLCV-Y48MR1JfoPcxRduD2X6DHEs0-vHz-" },
             "07/31": { title: "如何經營一個美滿的家 下半部", id: "PLCV-Y48MR1JfhoOu-uwe_l0L17_htAKBs" },
             
+            // 8月
             "08/01": { title: "如何成為卓越的上班族 上半部", id: "PLCV-Y48MR1Jdn2OHxmCDXk60S6wj7FFLb" },
             "08/02": { title: "如何成為卓越的上班族 下半部", id: "PLCV-Y48MR1JdRXg7LtatMu_pkA26xckL_" },
             "08/03": { title: "突破現狀.自我成長 上半部", id: "PLCV-Y48MR1JdeHiauGYq9un0r0sIjzXje" },
@@ -154,6 +164,7 @@
             "08/30": { title: "台灣諺語談理財 第一~二集", id: "PLCV-Y48MR1JdSLyqYGXRKmM6sQOXtEiJQ" },
             "08/31": { title: "台灣諺語談理財 第三~四集", id: "PLCV-Y48MR1JejKNg_9N7MCeHzdewiJ8Kc" },
     
+            // 9月
             "09/01": { title: "談人生-莫使金樽空對月 第一~二集", id: "PLCV-Y48MR1JeIo0_laxp34URRFVkArEf1" },
             "09/02": { title: "談人生-莫使金樽空對月 第三~四集", id: "PLCV-Y48MR1JcQXb4tIt3ocqvdcd5TFuSq" },
             "09/03": { title: "說愛情-問世間情為何物 第一~二集", id: "PLCV-Y48MR1JddDxh_Hff6rUWPKvHzC9nK" },
@@ -186,65 +197,78 @@
             "09/30": { title: "換個腦袋 出路無限(三)", id: "PLCV-Y48MR1JeahnPgzdFJTOezmNtUAziE" }
         };
 
-        // 參數與狀態
-        let storeName = localStorage.getItem("storeName") || "中清店";
-        let gasUrl = localStorage.getItem("gasUrl") || "https://script.google.com/macros/s/AKfycbwbQo4R0S3kLX0Pc6w9xj6jdSOoWS2vEavN8xQMn77Oi8yV6uKJn7du7NKB9u10UD61/exec";
-        let playTimesStr = localStorage.getItem("playTimes") || "12:00, 18:00, 00:00";
-        let stopMinutes = parseInt(localStorage.getItem("stopMinutes")) || 60; // 新增：預設60分鐘自動停止
+        // --- 預設與自訂參數處理 ---
+        const defaultStoreName = "中清店";
+        const defaultGasUrl = "https://script.google.com/macros/s/AKfycbwbQo4R0S3kLX0Pc6w9xj6jdSOoWS2vEavN8xQMn77Oi8yV6uKJn7du7NKB9u10UD61/exec";
+        const defaultPlayTimes = "12:00, 18:00, 00:00";
+        const defaultCaptureTimes = "15, 60, 120, 300";
+        const defaultStopTime = "30";
 
-        document.getElementById("input-store-name").value = storeName;
-        document.getElementById("input-gas-url").value = localStorage.getItem("gasUrl") || "";
-        document.getElementById("input-play-times").value = playTimesStr;
-        document.getElementById("input-stop-minutes").value = stopMinutes;
-        document.getElementById("store-name").innerText = storeName;
+        let storeName = localStorage.getItem("storeName") || defaultStoreName;
+        let gasUrl = localStorage.getItem("gasUrl") || defaultGasUrl;
+        let playTimesStr = localStorage.getItem("playTimes") || defaultPlayTimes;
+        let captureTimesStr = localStorage.getItem("captureTimes") || defaultCaptureTimes;
+        let stopTimeStr = localStorage.getItem("stopTime") || defaultStopTime;
 
-        let playTimesList = playTimesStr.split(',').map(s => s.trim());
-        let scheduleSeconds = [15, 60, 120, 300]; // 預設截圖點
+        // 解析排程陣列
+        const dailySchedules = playTimesStr.split(",").map(s => s.trim());
+        const scheduleSeconds = captureTimesStr.split(",").map(s => parseInt(s.trim()));
+        const PLAY_DURATION_LIMIT = parseInt(stopTimeStr) * 60; // 轉換為秒
         let hasTriggered = {};
         
+        // 系統狀態變數
         let player;
-        let playStartTime = new Date().getTime(); // 預設一開網頁就視為開始
+        let playStartTime = null;
         let screenshotCount = 0;
-        let isCompleted = false; // 新增：判斷當前排程是否已滿時結束
+        let isTaskCompleted = true; // 預設為已完成狀態，等待排程時間觸發
 
-        // ESC 控制
+        // UI 初始化
+        document.getElementById("store-name").innerText = storeName;
+        document.getElementById("input-store-name").value = storeName;
+        document.getElementById("input-gas-url").value = gasUrl;
+        document.getElementById("input-play-times").value = playTimesStr;
+        document.getElementById("input-capture-times").value = captureTimesStr;
+        document.getElementById("input-stop-time").value = stopTimeStr;
+
+        // --- 彈出視窗與快捷鍵設定 ---
         document.addEventListener('keydown', function(event) {
             if (event.key === "Escape") {
                 document.getElementById('settings-modal').style.display = 'block';
                 document.getElementById('overlay').style.display = 'block';
-                document.getElementById('test-btn').style.display = 'block';
+                document.getElementById('test-btn').style.display = 'block'; // 叫出測試按鈕
             }
         });
 
         function saveSettings() {
-            let nStore = document.getElementById("input-store-name").value.trim();
-            let nGas = document.getElementById("input-gas-url").value.trim();
-            let nTimes = document.getElementById("input-play-times").value.trim();
-            let nStop = document.getElementById("input-stop-minutes").value.trim();
-            
-            if (nStore) localStorage.setItem("storeName", nStore);
-            if (nTimes) localStorage.setItem("playTimes", nTimes);
-            if (nStop) localStorage.setItem("stopMinutes", nStop);
-            
-            if (nGas) localStorage.setItem("gasUrl", nGas);
-            else localStorage.removeItem("gasUrl");
+            localStorage.setItem("storeName", document.getElementById("input-store-name").value.trim() || defaultStoreName);
+            localStorage.setItem("gasUrl", document.getElementById("input-gas-url").value.trim() || defaultGasUrl);
+            localStorage.setItem("playTimes", document.getElementById("input-play-times").value.trim() || defaultPlayTimes);
+            localStorage.setItem("captureTimes", document.getElementById("input-capture-times").value.trim() || defaultCaptureTimes);
+            localStorage.setItem("stopTime", document.getElementById("input-stop-time").value.trim() || defaultStopTime);
             location.reload();
         }
 
-        // 日期計算
-        function getDateKey(d) {
-            let month = (d.getMonth() + 1).toString().padStart(2, '0');
-            let day = d.getDate().toString().padStart(2, '0');
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+        }
+
+        // --- 日曆與清單動態映射 ---
+        function getTodayKey() {
+            let params = new URLSearchParams(window.location.search);
+            if(params.has('date')) return params.get('date');
+            let today = new Date();
+            let month = (today.getMonth() + 1).toString().padStart(2, '0');
+            let day = today.getDate().toString().padStart(2, '0');
             return `${month}/${day}`;
         }
-        function getTodayKey() { return getDateKey(new Date()); }
-
         const dateKey = getTodayKey();
         const currentPlaylistData = playlistSchedule[dateKey];
         const targetPlaylistId = currentPlaylistData ? currentPlaylistData.id : "PLCV-Y48MR1Jdn2OHxmCDXk60S6wj7FFLb";
-        document.getElementById("video-schedule").innerText = `[${dateKey}] ${currentPlaylistData ? currentPlaylistData.title : "無排程"}`;
+        const targetTitle = currentPlaylistData ? currentPlaylistData.title : "本日無排程(預設)";
+        document.getElementById("video-schedule").innerText = `[${dateKey}] ${targetTitle}`;
 
-        // 載入 YT API
+        // --- YouTube API 載入 ---
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
@@ -252,112 +276,150 @@
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
-                playerVars: { 'autoplay': 1, 'controls': 0, 'loop': 1, 'mute': 1, 'listType': 'playlist', 'list': targetPlaylistId },
-                events: { 'onReady': onPlayerReady, 'onStateChange': onPlayerStateChange }
+                playerVars: { 
+                    'autoplay': 1, 
+                    'controls': 0, 
+                    'loop': 1, 
+                    'mute': 1, // 預設靜音
+                    'listType': 'playlist',
+                    'list': targetPlaylistId 
+                },
+                events: {
+                    'onStateChange': onPlayerStateChange
+                }
             });
         }
-        function onPlayerReady(event) { event.target.playVideo(); }
+
         function onPlayerStateChange(event) {
-            if (event.data == YT.PlayerState.PLAYING && !isCompleted) {
+            if (event.data == YT.PlayerState.PLAYING) {
                 let vData = player.getVideoData();
                 if (vData && vData.title) document.getElementById("video-schedule").innerText = `[${dateKey}] ${vData.title}`;
-                let dur = player.getDuration();
-                if(dur > 0) document.getElementById("loop-estimate").innerText = dur >= 3600 ? "(滿1小時)" : `(預計播 ${Math.ceil(3600/dur)} 次)`;
-            } else if (event.data == YT.PlayerState.PAUSED && !isCompleted) {
-                setTimeout(() => player.playVideo(), 500); // 防休眠
+                
+                let vDuration = player.getDuration();
+                if(vDuration > 0){
+                    let loops = Math.ceil(3600 / vDuration);
+                    document.getElementById("loop-estimate").innerText = vDuration >= 3600 ? "(滿1小時)" : `(預估 ${loops} 次)`;
+                }
+            } else if (event.data == YT.PlayerState.PAUSED) {
+                // 若任務尚未完成卻被暫停，則強制防休眠喚醒
+                if (!isTaskCompleted) {
+                    setTimeout(() => player.playVideo(), 500);
+                }
             }
         }
 
-        // 主迴圈
-        setInterval(() => {
-            let now = new Date();
-            document.getElementById("current-time").innerText = now.toLocaleString('zh-TW', { hour12: false });
-            
-            // 計算下次時間
+        // --- 排程預測與主時鐘迴圈 ---
+        function updateNextSchedule(now) {
             let currentMinutes = now.getHours() * 60 + now.getMinutes();
-            let timeValues = playTimesList.map(t => { let p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }).sort((a,b) => a - b);
-            let nextTimeStr = "", nextDateKey = dateKey;
-            let foundToday = false;
+            let futureSchedules = dailySchedules.map(t => {
+                let parts = t.split(":");
+                return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+            }).filter(m => m > currentMinutes);
             
-            for (let t of timeValues) {
-                if (t > currentMinutes) {
-                    nextTimeStr = `${Math.floor(t/60).toString().padStart(2,'0')}:${(t%60).toString().padStart(2,'0')} (今日)`;
-                    foundToday = true; break;
+            if (futureSchedules.length > 0) {
+                let next = futureSchedules.sort((a,b)=>a-b)[0];
+                let nh = Math.floor(next / 60).toString().padStart(2, '0');
+                let nm = (next % 60).toString().padStart(2, '0');
+                document.getElementById("next-schedule-time").innerText = `${nh}:${nm} (今日)`;
+            } else {
+                let all = dailySchedules.map(t => {
+                    let parts = t.split(":");
+                    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+                }).sort((a,b)=>a-b);
+                if(all.length > 0) {
+                    let nh = Math.floor(all[0] / 60).toString().padStart(2, '0');
+                    let nm = (all[0] % 60).toString().padStart(2, '0');
+                    document.getElementById("next-schedule-time").innerText = `${nh}:${nm} (明日)`;
                 }
             }
-            if (!foundToday) {
-                nextTimeStr = `${Math.floor(timeValues[0]/60).toString().padStart(2,'0')}:${(timeValues[0]%60).toString().padStart(2,'0')} (明日)`;
-                let tmr = new Date(); tmr.setDate(tmr.getDate() + 1); nextDateKey = getDateKey(tmr);
-            }
-            document.getElementById("next-schedule-time").innerText = nextTimeStr;
-            document.getElementById("next-video-title").innerText = `[${nextDateKey}] ${playlistSchedule[nextDateKey] ? playlistSchedule[nextDateKey].title : "無排程"}`;
+        }
 
-            // ★ 觸發新排程 (時間到自動解除停止，重新開始)
-            let currentHHMM = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-            if (playTimesList.includes(currentHHMM) && now.getSeconds() === 0) {
-                if (dateKey !== getTodayKey()) location.reload(); // 跨日換片
+        setInterval(() => {
+            let now = new Date();
+            let currentTimeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
+            let currentHHmm = currentTimeStr.substring(0, 5); // 取 HH:mm
+            let currentSec = now.getSeconds();
+
+            document.getElementById("current-time").innerText = currentTimeStr;
+            updateNextSchedule(now);
+
+            // 更新影片當前時間
+            if(player && player.getCurrentTime) {
+                let cSec = Math.floor(player.getCurrentTime());
+                let m = Math.floor(cSec / 60).toString().padStart(2, '0');
+                let s = (cSec % 60).toString().padStart(2, '0');
+                document.getElementById("video-current-time").innerText = `${m}:${s}`;
+            }
+
+            // 1. 觸發開播與放大機制 (精準判定 HH:mm 且秒數為 00)
+            if (dailySchedules.includes(currentHHmm) && currentSec === 0 && isTaskCompleted) {
+                showLog(`到達排程時間！自動放大視窗並開始...`, "#4CAF50");
+                window.postMessage({ type: "REQUEST_MAXIMIZE" }, "*"); // 呼叫外掛放大
                 
                 playStartTime = now.getTime();
-                isCompleted = false; // 解除停止標記
+                isTaskCompleted = false;
+                scheduleSeconds.forEach(sec => hasTriggered[sec] = false);
                 screenshotCount = 0;
-                scheduleSeconds.forEach(t => hasTriggered[t] = false);
+                document.getElementById("screenshot-count").innerText = `0 張`;
                 
-                document.getElementById("screenshot-count").innerText = "0 張";
-                if (player && typeof player.playVideo === 'function') player.playVideo();
-                showLog(`[${currentHHMM}] 系統甦醒，開始新一輪 ${stopMinutes} 分鐘巡檢！`, "#4CAF50");
+                setTimeout(() => { if (player && player.playVideo) player.playVideo(); }, 1000);
             }
 
-            // 更新影片時間
-            if(player && player.getCurrentTime && !isCompleted) {
-                let currentSec = Math.floor(player.getCurrentTime());
-                document.getElementById("video-current-time").innerText = `${Math.floor(currentSec/60).toString().padStart(2,'0')}:${(currentSec%60).toString().padStart(2,'0')}`;
-            }
+            // 2. 播放中狀態計算
+            if (playStartTime && !isTaskCompleted) {
+                let elapsedSeconds = Math.floor((now.getTime() - playStartTime) / 1000);
+                document.getElementById("total-play-time").innerText = Math.floor(elapsedSeconds / 60) + " 分鐘";
 
-            // ★ 滿時自動停止機制 & 截圖邏輯
-            if (playStartTime && !isCompleted) {
-                let elapsedMs = now.getTime() - playStartTime;
-                let elapsedSeconds = Math.floor(elapsedMs / 1000);
-                let elapsedMins = Math.floor(elapsedSeconds / 60);
-                
-                document.getElementById("total-play-time").innerText = elapsedMins + " 分鐘";
+                // 檢查是否需截圖
+                scheduleSeconds.forEach(targetSec => {
+                    if (elapsedSeconds >= targetSec && !hasTriggered[targetSec]) {
+                        hasTriggered[targetSec] = true;
+                        let typeStr = targetSec < 60 ? `${targetSec}秒` : `${targetSec/60}分鐘`;
+                        takeAndUploadScreenshot(`排程: ${typeStr}`);
+                    }
+                });
 
-                // 檢查是否超過設定的自動停止時間 (預設60分鐘)
-                if (elapsedMins >= stopMinutes) {
-                    isCompleted = true; // 標記為完成，停止迴圈計時
-                    if (player && typeof player.stopVideo === 'function') player.stopVideo(); // 強制停止 YT
+                // 3. 觸發結束與縮小機制 (滿時停止)
+                if (elapsedSeconds >= PLAY_DURATION_LIMIT) {
+                    isTaskCompleted = true; 
+                    if (player && typeof player.pauseVideo === 'function') player.pauseVideo();
+                    showLog(`✅ ${stopTimeStr}分鐘內訓達標，自動縮小視窗等待下次排程`, "#4CAF50");
                     
-                    showLog(`✅ 已完成 ${stopMinutes} 分鐘內訓，影片自動停止等待下次排程。`, "#4CAF50");
-                    document.getElementById("video-current-time").innerText = "已停止";
-                    document.getElementById("loop-estimate").innerText = "";
-                } else {
-                    // 若未超時，則正常檢查截圖
-                    scheduleSeconds.forEach(targetSec => {
-                        if (elapsedSeconds >= targetSec && !hasTriggered[targetSec]) {
-                            hasTriggered[targetSec] = true;
-                            takeAndUploadScreenshot(`排程: ${targetSec < 60 ? targetSec+'秒' : (targetSec/60)+'分鐘'}`);
-                        }
-                    });
+                    setTimeout(() => {
+                        window.postMessage({ type: "REQUEST_MINIMIZE" }, "*"); // 呼叫外掛縮小
+                    }, 3000); 
                 }
             }
         }, 1000);
 
         function showLog(msg, color = "#ffeb3b") {
             const logEl = document.getElementById("status-log");
-            logEl.style.color = color; logEl.innerText = msg;
+            logEl.style.color = color;
+            logEl.innerText = msg;
         }
 
+        // --- 外掛截圖與上傳機制 ---
         function takeAndUploadScreenshot(type = "自動截圖") {
             showLog(`[${type}] 呼叫外掛截圖中...`, "#03A9F4");
             window.postMessage({ type: "REQUEST_CAPTURE" }, "*");
-            let captureTimeout = setTimeout(() => { showLog(`[${type}] 截圖失敗：未偵測到 Chrome 外掛！`, "#f44336"); }, 3000);
+
+            let captureTimeout = setTimeout(() => {
+                showLog(`[${type}] 截圖失敗：未偵測到擴充功能！`, "#f44336");
+            }, 3000);
 
             function captureListener(event) {
                 if (event.source !== window || !event.data) return;
                 if (event.data.type === "RECEIVE_CAPTURE") {
                     clearTimeout(captureTimeout); 
                     window.removeEventListener("message", captureListener);
+
+                    let imgData = event.data.dataUrl;
+                    if(!imgData) {
+                        showLog(`[${type}] 擷取失敗，無畫面。`, "#f44336");
+                        return;
+                    }
                     showLog(`[${type}] 擷取成功，上傳雲端中...`, "#ffeb3b");
-                    uploadToCloud(event.data.dataUrl, type);
+                    uploadToCloud(imgData, type);
                 }
             }
             window.addEventListener("message", captureListener);
@@ -365,49 +427,54 @@
 
         function uploadToCloud(base64Data, type) {
             let payload = {
-                image: base64Data, storeName: storeName, type: type,
+                image: base64Data,
+                storeName: storeName,
                 time: document.getElementById("current-time").innerText,
+                type: type,
                 videoTitle: document.getElementById("video-schedule").innerText
             };
+
             fetch(gasUrl, {
-                method: "POST", mode: "no-cors",
+                method: "POST",
+                mode: "no-cors", // 盲傳模式，無視 GitHub CORS 限制
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(payload)
-            }).then(() => {
+            })
+            .then(() => {
                 screenshotCount++;
                 document.getElementById("screenshot-count").innerText = `${screenshotCount} 張`;
-                showLog(`[${type}] 上傳成功！已存入雲端。`, "#4CAF50");
-            }).catch(() => showLog(`[${type}] 連線錯誤。`, "#f44336"));
+                showLog(`[${type}] 上傳成功！`, "#4CAF50");
+            })
+            .catch(err => {
+                showLog(`[${type}] 上傳遭遇網路問題。`, "#f44336");
+            });
         }
 
-        // 拖曳與縮放衝突修正 (防護區間機制)
+        // --- 拖曳防衝突設計 (保護縮放功能) ---
         const infoBox = document.getElementById("info-box");
         let isDragging = false, offsetX, offsetY;
-        
         infoBox.addEventListener("mousedown", (e) => {
             if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
             
-            // ★ 核心修正：偵測滑鼠是否點擊在右下角的「縮放控制代碼」範圍 (約 25x25 像素)
             let rect = infoBox.getBoundingClientRect();
-            if (e.clientX >= rect.right - 25 && e.clientY >= rect.bottom - 25) {
-                return; // 如果點在右下角，直接中斷拖曳邏輯，讓瀏覽器執行原生縮放！
+            // 防護區：如果點擊在右下角 25x25 像素內，認定為「調整大小」，放行不拖曳
+            if (e.clientX > rect.right - 25 && e.clientY > rect.bottom - 25) {
+                return; 
             }
 
-            isDragging = true; 
-            offsetX = e.clientX - rect.left; 
+            isDragging = true;
+            offsetX = e.clientX - rect.left;
             offsetY = e.clientY - rect.top;
             infoBox.style.cursor = "grabbing";
         });
-        
         document.addEventListener("mousemove", (e) => {
-            if (!isDragging) return; 
-            infoBox.style.left = (e.clientX - offsetX) + "px"; 
+            if (!isDragging) return;
+            infoBox.style.left = (e.clientX - offsetX) + "px";
             infoBox.style.top = (e.clientY - offsetY) + "px";
         });
-        
-        document.addEventListener("mouseup", () => { 
-            isDragging = false; 
-            infoBox.style.cursor = "move"; 
+        document.addEventListener("mouseup", () => {
+            isDragging = false;
+            infoBox.style.cursor = "move";
         });
     </script>
 </body>
