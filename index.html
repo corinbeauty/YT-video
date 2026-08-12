@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>門店內訓自動播放系統</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; font-family: '微軟正黑體', sans-serif; }
+        #player { width: 100vw; height: 100vh; pointer-events: none; }
+        
+        /* 輕量化彈性資訊方框 */
+        #info-box {
+            position: absolute; top: 10%; left: 2%; 
+            background: rgba(0, 0, 0, 0.75); color: #fff;
+            padding: 15px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 9999; cursor: move;
+            min-width: 140px; max-width: 50%; width: auto; 
+            resize: both; overflow: hidden;
+        }
+        #info-box h2 { margin: 0 0 10px 0; font-size: 16px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 5px; }
+        
+        .info-row { display: flex; margin-bottom: 6px; font-size: 13px; line-height: 1.4; }
+        .info-label { color: #aaa; font-weight: bold; white-space: nowrap; margin-right: 5px; }
+        .info-value { flex: 1; word-break: break-all; }
+        
+        #status-log {
+            margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.1);
+            border-radius: 6px; font-size: 12px; min-height: 20px; color: #ffeb3b;
+        }
+        
+        #test-btn {
+            display: none; 
+            margin-top: 10px; width: 100%; padding: 8px;
+            background: #2196F3; color: white; border: none;
+            border-radius: 6px; cursor: pointer; font-size: 14px;
+        }
+        #test-btn:hover { background: #1976D2; }
+
+        #settings-modal {
+            display: none; position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); background: #222;
+            padding: 25px; border-radius: 10px; color: white;
+            z-index: 10000; width: 360px; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            max-height: 90vh; overflow-y: auto;
+        }
+        .modal-input { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; }
+        .modal-btn { background: #4CAF50; color: white; border: none; padding: 10px 20px; cursor: pointer; width: 100%; font-size: 16px; }
+        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; }
+    </style>
+</head>
+<body>
+
+    <div id="player"></div>
+
+    <div id="info-box">
+        <h2>📌 門店自動巡檢 V1.4 (LINE推播版)</h2>
+        <div class="info-row"><div class="info-label">🏪 門店：</div><div class="info-value" id="store-name">讀取中...</div></div>
+        <div class="info-row"><div class="info-label">📅 目前：</div><div class="info-value" id="current-time">讀取中...</div></div>
+        <div class="info-row"><div class="info-label">⏰ 下次：</div><div class="info-value" id="next-schedule-time" style="color:#FF9800;">計算中...</div></div>
+        <div class="info-row"><div class="info-label">🎬 排程：</div><div class="info-value" id="video-schedule">載入中...</div></div>
+        <div class="info-row"><div class="info-label">▶ 已播：</div><div class="info-value" id="total-play-time">0 分鐘</div></div>
+        <div class="info-row"><div class="info-label">⏱ 影片：</div><div class="info-value"><span id="video-current-time">00:00</span></div></div>
+        <div class="info-row"><div class="info-label">📸 截圖：</div><div class="info-value" id="screenshot-count">0 張</div></div>
+        <div id="status-log">系統待命中...</div>
+        <button id="test-btn" onclick="takeAndUploadScreenshot('手動測試')">馬上測試一鍵截圖</button>
+    </div>
+
+    <div id="overlay"></div>
+    <div id="settings-modal">
+        <h3 style="margin-top:0; border-bottom: 1px solid #444; padding-bottom: 10px;">⚙️ 系統進階設定</h3>
+        <label>門店名稱：</label>
+        <input type="text" id="input-store-name" class="modal-input" placeholder="例如：中清店">
+        <label>接收端 Google API (GAS) URL：</label>
+        <input type="text" id="input-gas-url" class="modal-input" placeholder="貼上 /exec 結尾的網址">
+        <label>每日開播時間 (HH:mm, 逗號分隔)：</label>
+        <input type="text" id="input-play-times" class="modal-input" placeholder="例如：12:00, 18:00">
+        <label>截圖排程秒數 (逗號分隔)：</label>
+        <input type="text" id="input-capture-times" class="modal-input" placeholder="例如：15, 60, 120, 300">
+        <label>滿時自動停止並縮小 (分鐘)：</label>
+        <input type="number" id="input-stop-time" class="modal-input" placeholder="例如：30">
+        <button class="modal-btn" onclick="saveSettings()">儲存並重新載入</button>
+        <button class="modal-btn" onclick="closeSettings()" style="background:#666; margin-top:10px;">取消關閉</button>
+    </div>
+
+    <script>
+        // --- 07/01 ~ 09/30 完整播放清單庫 ---
+        const playlistSchedule = {
+            "07/01": { title: "讓客人說Yes !優質的銷售心法 下集", id: "PLCV-Y48MR1Jd-DqEGEVW0txYmxFOpEmGz" },
+            "07/02": { title: "敢於挑戰夢想 上集", id: "PLCV-Y48MR1JcVZKK-xxhyRIo0recmZoJT" },
+            "07/03": { title: "敢於挑戰夢想 下集", id: "PLCV-Y48MR1Je4gmZw6gGSBWXFmgTiFN4b" },
+            "07/04": { title: "態度決勝負 上集", id: "PLCV-Y48MR1JexttsFgAYwdcxvK5gJG8qZ" },
+            "07/05": { title: "態度決勝負 下集", id: "PLCV-Y48MR1JfZVCEEjgHSIQeJiutTd1SI" },
+            "07/06": { title: "成功優質生活的五Ｑ必勝法則 上集", id: "PLCV-Y48MR1JcXXO9pouB_LTAYNTp9RaVH" },
+            "07/07": { title: "成功優質生活的五Ｑ必勝法則 下集", id: "PLCV-Y48MR1JfRcSGSs76msFc7PxGyL9DZ" },
+            "07/08": { title: "現代人職場大贏家法則 上集", id: "PLCV-Y48MR1JdUTJ0O4Rj5i8fu0ptsK0vt" },
+            "07/09": { title: "現代人職場大贏家法則 下集", id: "PLCV-Y48MR1JcE6f2iHnl6NBAPI5S_aWwE" },
+            "07/10": { title: "從關係中找回生命的核心價值 上集", id: "PLCV-Y48MR1JcBJKaDWk5fQvQk4ZTWLAi8" },
+            "07/11": { title: "從關係中找回生命的核心價值 下集", id: "PLCV-Y48MR1Jd4QMf17fX30a5AJLjw25A9" },
+            "07/12": { title: "不感動也難-新時代的人際吸引力 上集", id: "PLCV-Y48MR1JeN18nT82cA3TFtKi9xx5KL" },
+            "07/13": { title: "不感動也難-新時代的人際吸引力 下集", id: "PLCV-Y48MR1JfhG7m1IgyOGyLsItrRTFgY" },
+            "07/14": { title: "揪感心的服務-好客由你來創造 上集", id: "PLCV-Y48MR1JcqLgqA4gq2c-D4fOF2uChr" },
+            "07/15": { title: "揪感心的服務-好客由你來創造 下集", id: "PLCV-Y48MR1JdsMfSKMVCSOOyuUCpm7CC3" },
+            "07/16": { title: "如何在逆境中創造優勢 上集", id: "PLCV-Y48MR1JfgoDMBcThxIgW93hqvs-v_" },
+            "07/17": { title: "如何在逆境中創造優勢 下集", id: "PLCV-Y48MR1Jf-w_hZ3mtH2C_brw9WTqzm" },
+            "07/18": { title: "好聲音溝通力-把話說好，讓溝通更有效率 上集", id: "PLCV-Y48MR1Jdb2pjUqzusMOfQby3Llq5l" },
+            "07/19": { title: "好聲音溝通力-把話說好，讓溝通更有效率 下集", id: "PLCV-Y48MR1Jfw5PaIEadYpASQSYKHFny8" },
+            "07/20": { title: "好聲音形象力-用聲音創造好形象 上集", id: "PLCV-Y48MR1Jcemhkp5LUYZRL1S539FWLL" },
+            "07/21": { title: "好聲音形象力-用聲音創造好形象 下集", id: "PLCV-Y48MR1JcgZ04uRg2yUVp4OQKTiCEW" },
+            "07/22": { title: "高獲利的銷售技能與販賣技巧 上集", id: "PLCV-Y48MR1Jfm2y2IT0xBfJstkR8ud9jJ" },
+            "07/23": { title: "高獲利的銷售技能與販賣技巧 下集", id: "PLCV-Y48MR1JcJVKDyl4yk1cVjB3dg_UOK" },
+            "07/24": { title: "超級顧客的服務管理與VIP經營 上集", id: "PLCV-Y48MR1JdLBYLz1uUDX6_lAw2XcbEt" },
+            "07/25": { title: "超級顧客的服務管理與VIP經營 下集", id: "PLCV-Y48MR1JdTwXz15k5On8GWPFpQO6mY" },
+            "07/26": { title: "最有溫度的感動行銷 上集", id: "PLCV-Y48MR1JdU7SJDKjQZfeNn7agRTM6p" },
+            "07/27": { title: "最有溫度的感動行銷 下集", id: "PLCV-Y48MR1JdDq7jp2Ia9ASq31rzDAY3z" },
+            "07/28": { title: "打動人心的顧客經營祕訣 上集", id: "PLCV-Y48MR1JdvOgifjZAZiQVx1o1mtwYo" },
+            "07/29": { title: "打動人心的顧客經營祕訣 下集", id: "PLCV-Y48MR1Jfj3zhvGDoj449HPeYWlqlW" },
+            "07/30": { title: "如何經營一個美滿的家 上半部", id: "PLCV-Y48MR1JfoPcxRduD2X6DHEs0-vHz-" },
+            "07/31": { title: "如何經營一個美滿的家 下半部", id: "PLCV-Y48MR1JfhoOu-uwe_l0L17_htAKBs" },
+            
+            // 8月
+            "08/01": { title: "如何成為卓越的上班族 上半部", id: "PLCV-Y48MR1Jdn2OHxmCDXk60S6wj7FFLb" },
+            "08/02": { title: "如何成為卓越的上班族 下半部", id: "PLCV-Y48MR1JdRXg7LtatMu_pkA26xckL_" },
+            "08/03": { title: "突破現狀.自我成長 上半部", id: "PLCV-Y48MR1JdeHiauGYq9un0r0sIjzXje" },
+            "08/04": { title: "突破現狀.自我成長 下半部", id: "PLCV-Y48MR1Jd7sTN6AGyVkeMmWWnFIBsX" },
+            "08/05": { title: "如何創造好心情 上半部", id: "PLCV-Y48MR1JeOyl1b2_fP5ECaBCBNHEHd" },
+            "08/06": { title: "如何創造好心情 下半部", id: "PLCV-Y48MR1JfrtpJUyv3VkeAyNpnnPiyz" },
+            "08/07": { title: "如何提升銷售戰力 第一部第一~三集", id: "PLCV-Y48MR1JfO6qO9chPztCeJ47eXp5ss" },
+            "08/08": { title: "如何提升銷售戰力 第一部第四集 第二部第一~二集", id: "PLCV-Y48MR1JeI-1T_RTdMFUEKpMW8dGyf" },
+            "08/09": { title: "如何提升銷售戰力 第二部第三~四集 第三部第一集", id: "PLCV-Y48MR1JelWTnLOjMLMLdkjlYc3QHU" },
+            "08/10": { title: "如何提升銷售戰力 第三部第二~四集", id: "PLCV-Y48MR1JcbT8xfkUtkKmyV5DThX3pj" },
+            "08/11": { title: "如何做好溝通與管理 上半部", id: "PLCV-Y48MR1JevkHsb0MSIcAD4Qbvpw8wu" },
+            "08/12": { title: "如何做好溝通與管理 下半部", id: "PLCV-Y48MR1JdYMHnhmYUGXSDBvJuFJsLx" },
+            "08/13": { title: "淺談愛情.婚姻.工作觀 上半部", id: "PLCV-Y48MR1JfIAqZOi6MxMsTpKEM3wFD6" },
+            "08/14": { title: "淺談愛情.婚姻.工作觀 中半部", id: "PLCV-Y48MR1JdnIaOUAuz1XrxD7duPO--R" },
+            "08/15": { title: "淺談愛情.婚姻.工作觀 下半部", id: "PLCV-Y48MR1JfWxt1d7-r8BKJ2-IrOrifI" },
+            "08/16": { title: "如何做好人際運作 上集", id: "PLCV-Y48MR1JeM9PCvM55oA61iMmwzmV2R" },
+            "08/17": { title: "如何做好人際運作 下集", id: "PLCV-Y48MR1Je9mMuZT8XkwYtkx-0MKh74" },
+            "08/18": { title: "如何把話說得更好 上集", id: "PLCV-Y48MR1JfMb8FiyJGbuqI4ujWUxwGF" },
+            "08/19": { title: "如何把話說得更好 下集", id: "PLCV-Y48MR1JeSK02btsQkVMPJBLQHC4E2" },
+            "08/20": { title: "生活有藍天 悟出希望來 上集", id: "PLCV-Y48MR1Jegjy6GVBvoPoLeyG2PToa7" },
+            "08/21": { title: "生活有藍天 悟出希望來 下集", id: "PLCV-Y48MR1JcNAQgwAGwp5OmSFnCd3zBW" },
+            "08/22": { title: "台灣諺語看人生 第一~二集", id: "PLCV-Y48MR1Jce-WgGFR5M86yc7PuKhcv_" },
+            "08/23": { title: "台灣諺語看人生 第三~四集", id: "PLCV-Y48MR1JcQt7fPrZnVsPB5SNcbM1-t" },
+            "08/24": { title: "話歲月-春花秋月何時了 第一~二集", id: "PLCV-Y48MR1JdpFos_o6_eagANUWURP7fG" },
+            "08/25": { title: "話歲月-春花秋月何時了 第三~四集", id: "PLCV-Y48MR1JdG75gEOqcNjyohKUAaY1p8" },
+            "08/26": { title: "論世事-無可奈何花落去 第一~二集", id: "PLCV-Y48MR1JckP5pjwMHJ7AhMb1uFeA7F" },
+            "08/27": { title: "論世事-無可奈何花落去 第三~四集", id: "PLCV-Y48MR1JddKSMwwkPCkl7m9Dit-Uw1" },
+            "08/28": { title: "台灣諺語論世事 第一~二集", id: "PLCV-Y48MR1Jfiw3WP9B0PTgsZwvQIM20q" },
+            "08/29": { title: "台灣諺語論世事 第三~四集", id: "PLCV-Y48MR1JcH1CVfNHhvBFZ7z2DaJbhs" },
+            "08/30": { title: "台灣諺語談理財 第一~二集", id: "PLCV-Y48MR1JdSLyqYGXRKmM6sQOXtEiJQ" },
+            "08/31": { title: "台灣諺語談理財 第三~四集", id: "PLCV-Y48MR1JejKNg_9N7MCeHzdewiJ8Kc" },
+    
+            // 9月
+            "09/01": { title: "談人生-莫使金樽空對月 第一~二集", id: "PLCV-Y48MR1JeIo0_laxp34URRFVkArEf1" },
+            "09/02": { title: "談人生-莫使金樽空對月 第三~四集", id: "PLCV-Y48MR1JcQXb4tIt3ocqvdcd5TFuSq" },
+            "09/03": { title: "說愛情-問世間情為何物 第一~二集", id: "PLCV-Y48MR1JddDxh_Hff6rUWPKvHzC9nK" },
+            "09/04": { title: "說愛情-問世間情為何物 第三~四集", id: "PLCV-Y48MR1JfCSnm_a5-1R3SiUO5Br_U2" },
+            "09/05": { title: "說服要領與抱怨處理(一)", id: "PLCV-Y48MR1Jc-Yo_MyKCAjFVdDEDWjq2l" },
+            "09/06": { title: "說服要領與抱怨處理(二)", id: "PLCV-Y48MR1JdOhzRgVUlqMD5AZagCzDsH" },
+            "09/07": { title: "說服要領與抱怨處理(三)", id: "PLCV-Y48MR1JcAYo8RXv8JOXHFkmfRVJjF" },
+            "09/08": { title: "如何提升服務品質(一)", id: "PLCV-Y48MR1JcD1gtr7UIdCsABZe1jRJqk" },
+            "09/09": { title: "如何提升服務品質(二)", id: "PLCV-Y48MR1JekyZUkbC1ls_6DwJr0JW72" },
+            "09/10": { title: "如何提升服務品質(三)", id: "PLCV-Y48MR1JdG18NQiq20lmH01fWuk5f9" },
+            "09/11": { title: "EQ與情緒管理(一)", id: "PLCV-Y48MR1JcDXEf7M964LQUnVfYf6Ga-" },
+            "09/12": { title: "EQ與情緒管理(二)", id: "PLCV-Y48MR1JcXb7UXfBOwlW--wWX-nksO" },
+            "09/13": { title: "EQ與情緒管理(三)", id: "PLCV-Y48MR1JerTwfydMUIMQ7SGZmXLkt4" },
+            "09/14": { title: "人脈成功致富學(一)", id: "PLCV-Y48MR1JcdIPszHxdAtGnDkewer9Bp" },
+            "09/15": { title: "人脈成功致富學(二)", id: "PLCV-Y48MR1JfLU8KguBbuEA1lRCDEnF1s" },
+            "09/16": { title: "人脈成功致富學(三)", id: "PLCV-Y48MR1JfuwkNqx5MV01u5rnnULy8D" },
+            "09/17": { title: "如何做一個快樂的現代人(一)", id: "PLCV-Y48MR1JedSEJ5QXuZA9Pajp2QbpPO" },
+            "09/18": { title: "如何做一個快樂的現代人(二)", id: "PLCV-Y48MR1JccZ43cRlgoB-FL6wbIEVLk" },
+            "09/19": { title: "如何做一個快樂的現代人(三)", id: "PLCV-Y48MR1JejNXjyHoxAQORWhCAdXPpA" },
+            "09/20": { title: "如何創造魅力與影響力(一)", id: "PLCV-Y48MR1JdjchNQSRMhWl0NgD1HOLzZ" },
+            "09/21": { title: "如何創造魅力與影響力(二)", id: "PLCV-Y48MR1Jfb15VhmhL1D4WYkfQb9zO1" },
+            "09/22": { title: "吸引力法則 心想事成的方法(一)", id: "PLCV-Y48MR1JfUbw5WAEbG2SEQ72Af9Ynl" },
+            "09/23": { title: "吸引力法則 心想事成的方法(二)", id: "PLCV-Y48MR1JdfS9RPqMGTLQNsvY8LbSSC" },
+            "09/24": { title: "吸引力法則 心想事成的方法(三)", id: "PLCV-Y48MR1JeDDQtS9vFXgX5sDJdxmg0-" },
+            "09/25": { title: "幽默口才成功學(一)", id: "PLCV-Y48MR1JeRrd03M5vjI61vLnaN_pzq" },
+            "09/26": { title: "幽默口才成功學(二)", id: "PLCV-Y48MR1JfGnAh4cK0cJjLvTyw7acTE" },
+            "09/27": { title: "幽默口才成功學(三)", id: "PLCV-Y48MR1JfM9VgfxgWB4yip7iF67t5k" },
+            "09/28": { title: "換個腦袋 出路無限(一)", id: "PLCV-Y48MR1JecLnd3e-wpH9UZzgbN-ihL" },
+            "09/29": { title: "換個腦袋 出路無限(二)", id: "PLCV-Y48MR1JdSSewV8mwnVn264uDiVv4v" },
+            "09/30": { title: "換個腦袋 出路無限(三)", id: "PLCV-Y48MR1JeahnPgzdFJTOezmNtUAziE" }
+        };
+
+        // --- 預設與自訂參數處理 ---
+        let storeName = localStorage.getItem("storeName") || "中清店";
+        let gasUrl = localStorage.getItem("gasUrl") || "https://script.google.com/macros/s/AKfycbwbQo4R0S3kLX0Pc6w9xj6jdSOoWS2vEavN8xQMn77Oi8yV6uKJn7du7NKB9u10UD61/exec";
+        let playTimesStr = localStorage.getItem("playTimes") || "12:00, 18:00, 00:00";
+        let captureTimesStr = localStorage.getItem("captureTimes") || "15, 60, 120, 300";
+        let stopTimeStr = localStorage.getItem("stopTime") || "30";
+
+        const dailySchedules = playTimesStr.split(",").map(s => s.trim());
+        const scheduleSeconds = captureTimesStr.split(",").map(s => parseInt(s.trim()));
+        const PLAY_DURATION_LIMIT = parseInt(stopTimeStr) * 60;
+        
+        let hasTriggered = {};
+        let player, playStartTime = null, screenshotCount = 0;
+        let isTaskCompleted = true; // 預設為已完成，等待排程觸發
+        let lastTriggeredSchedule = null; // 防休眠觸發鎖
+        let hasReloadedToday = false; // 每日重整鎖
+
+        // --- UI 初始化 ---
+        document.getElementById("store-name").innerText = storeName;
+        document.getElementById("input-store-name").value = storeName;
+        document.getElementById("input-gas-url").value = gasUrl;
+        document.getElementById("input-play-times").value = playTimesStr;
+        document.getElementById("input-capture-times").value = captureTimesStr;
+        document.getElementById("input-stop-time").value = stopTimeStr;
+
+        // --- 彈出設定視窗 (ESC鍵) ---
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape") {
+                document.getElementById('settings-modal').style.display = 'block';
+                document.getElementById('overlay').style.display = 'block';
+                document.getElementById('test-btn').style.display = 'block'; 
+            }
+        });
+
+        function saveSettings() {
+            localStorage.setItem("storeName", document.getElementById("input-store-name").value.trim());
+            localStorage.setItem("gasUrl", document.getElementById("input-gas-url").value.trim());
+            localStorage.setItem("playTimes", document.getElementById("input-play-times").value.trim());
+            localStorage.setItem("captureTimes", document.getElementById("input-capture-times").value.trim());
+            localStorage.setItem("stopTime", document.getElementById("input-stop-time").value.trim());
+            location.reload();
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+        }
+
+        // --- 日期與清單動態對應邏輯 ---
+        function getTodayKey() {
+            let today = new Date();
+            let month = (today.getMonth() + 1).toString().padStart(2, '0');
+            let day = today.getDate().toString().padStart(2, '0');
+            return `${month}/${day}`;
+        }
+        
+        const dateKey = getTodayKey();
+        const currentPlaylistData = playlistSchedule[dateKey];
+        // 如果找不到當天排程，預設給一個保底影片
+        const targetPlaylistId = currentPlaylistData ? currentPlaylistData.id : "PLCV-Y48MR1Jdn2OHxmCDXk60S6wj7FFLb";
+        const targetTitle = currentPlaylistData ? currentPlaylistData.title : "本日無排程(預設)";
+        document.getElementById("video-schedule").innerText = `[${dateKey}] ${targetTitle}`;
+
+        // --- YouTube API 載入 ---
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+                playerVars: { 
+                    'autoplay': 1, 
+                    'controls': 0, 
+                    'loop': 1, 
+                    'mute': 1, 
+                    'listType': 'playlist',
+                    'list': targetPlaylistId // 動態套用今日播放清單
+                }
+            });
+        }
+
+        // --- 排程預測與日期顯示 ---
+        function updateNextSchedule(now) {
+            let currentMinutes = now.getHours() * 60 + now.getMinutes();
+            
+            let sortedSchedules = dailySchedules.map(t => {
+                let parts = t.split(":");
+                return {
+                    h: parseInt(parts[0]),
+                    m: parseInt(parts[1]),
+                    totalMinutes: parseInt(parts[0]) * 60 + parseInt(parts[1]),
+                    str: t
+                };
+            }).sort((a,b) => a.totalMinutes - b.totalMinutes);
+            
+            let next = sortedSchedules.find(s => s.totalMinutes > currentMinutes);
+            
+            if (next) {
+                let month = (now.getMonth() + 1).toString().padStart(2, '0');
+                let day = now.getDate().toString().padStart(2, '0');
+                document.getElementById("next-schedule-time").innerText = `${month}/${day} ${next.str}`;
+            } else {
+                let tomorrow = new Date(now);
+                tomorrow.setDate(now.getDate() + 1);
+                let month = (tomorrow.getMonth() + 1).toString().padStart(2, '0');
+                let day = tomorrow.getDate().toString().padStart(2, '0');
+                document.getElementById("next-schedule-time").innerText = `${month}/${day} ${sortedSchedules[0].str} (明日)`;
+            }
+        }
+
+        // --- 主時鐘與防休眠觸發迴圈 ---
+        setInterval(() => {
+            let now = new Date();
+            let currentTimeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
+            let currentHHmm = currentTimeStr.substring(0, 5); 
+
+            document.getElementById("current-time").innerText = currentTimeStr;
+            updateNextSchedule(now);
+
+            // 更新影片當前時間
+            if(player && player.getCurrentTime) {
+                let cSec = Math.floor(player.getCurrentTime());
+                let m = Math.floor(cSec / 60).toString().padStart(2, '0');
+                let s = (cSec % 60).toString().padStart(2, '0');
+                document.getElementById("video-current-time").innerText = `${m}:${s}`;
+            }
+
+            // 1. 觸發開播與放大機制 (防休眠：無視秒數延遲)
+            if (dailySchedules.includes(currentHHmm) && currentHHmm !== lastTriggeredSchedule && isTaskCompleted) {
+                lastTriggeredSchedule = currentHHmm;
+                
+                showLog(`到達排程時間！自動放大視窗並開始...`, "#4CAF50");
+                window.postMessage({ type: "REQUEST_MAXIMIZE" }, "*"); // 呼叫外掛放大
+                
+                playStartTime = now.getTime();
+                isTaskCompleted = false;
+
+                // 發送 LINE 開始播放推播
+                sendLineNotification("🟢 開始播放");
+                
+                scheduleSeconds.forEach(sec => hasTriggered[sec] = false);
+                screenshotCount = 0;
+                document.getElementById("screenshot-count").innerText = `0 張`;
+                
+                setTimeout(() => { if (player && player.playVideo) player.playVideo(); }, 1500);
+            }
+
+            // 2. 播放中狀態計算
+            if (playStartTime && !isTaskCompleted) {
+                let elapsedSeconds = Math.floor((now.getTime() - playStartTime) / 1000);
+                document.getElementById("total-play-time").innerText = Math.floor(elapsedSeconds / 60) + " 分鐘";
+
+                // 檢查截圖
+                scheduleSeconds.forEach(targetSec => {
+                    if (elapsedSeconds >= targetSec && !hasTriggered[targetSec]) {
+                        hasTriggered[targetSec] = true;
+                        let typeStr = targetSec < 60 ? `${targetSec}秒` : `${targetSec/60}分鐘`;
+                        takeAndUploadScreenshot(`排程: ${typeStr}`);
+                    }
+                });
+
+                // 3. 結束與縮小機制
+                if (elapsedSeconds >= PLAY_DURATION_LIMIT) {
+                    isTaskCompleted = true; 
+
+                    // 發送 LINE 結束播放推播
+                    sendLineNotification("🔴 結束播放");
+
+                    if (player && typeof player.pauseVideo === 'function') player.pauseVideo();
+                    showLog(`✅ 任務完成，縮小中...`, "#4CAF50");
+                    
+                    setTimeout(() => {
+                        window.postMessage({ type: "REQUEST_MINIMIZE" }, "*");
+                    }, 3000); 
+                }
+            }
+
+            // 4. 每日跨夜自動重整更新當日影片
+            if (currentHHmm === "03:00" && !hasReloadedToday) {
+                hasReloadedToday = true;
+                location.reload(); 
+            }
+            if (currentHHmm === "04:00") {
+                hasReloadedToday = false; 
+            }
+        }, 1000);
+
+        function showLog(msg, color = "#ffeb3b") {
+            const logEl = document.getElementById("status-log");
+            logEl.style.color = color;
+            logEl.innerText = msg;
+        }
+
+        // --- 外掛截圖與上傳機制 (附加完整日期時間) ---
+        function takeAndUploadScreenshot(type = "自動截圖") {
+            showLog(`[${type}] 呼叫外掛截圖中...`, "#03A9F4");
+            window.postMessage({ type: "REQUEST_CAPTURE" }, "*");
+
+            let captureTimeout = setTimeout(() => {
+                showLog(`[${type}] 截圖失敗：未偵測到擴充功能！`, "#f44336");
+            }, 3000);
+
+            function captureListener(event) {
+                if (event.source !== window || !event.data) return;
+                if (event.data.type === "RECEIVE_CAPTURE") {
+                    clearTimeout(captureTimeout); 
+                    window.removeEventListener("message", captureListener);
+
+                    let imgData = event.data.dataUrl;
+                    if(!imgData) {
+                        showLog(`[${type}] 擷取失敗，無畫面。`, "#f44336");
+                        return;
+                    }
+                    showLog(`[${type}] 擷取成功，上傳雲端中...`, "#ffeb3b");
+                    
+                    let now = new Date();
+                    let dateStr = (now.getMonth() + 1).toString().padStart(2, '0') + "/" + now.getDate().toString().padStart(2, '0');
+                    let timeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
+                    let fullTimestamp = `${dateStr} ${timeStr}`;
+
+                    uploadToCloud(imgData, type, fullTimestamp);
+                }
+            }
+            window.addEventListener("message", captureListener);
+        }
+
+        function uploadToCloud(base64Data, type, fullTimestamp) {
+            let payload = {
+                image: base64Data,
+                storeName: storeName,
+                time: fullTimestamp, // 使用附帶日期的時間
+                type: type,
+                videoTitle: document.getElementById("video-schedule").innerText
+            };
+
+            fetch(gasUrl, {
+                method: "POST",
+                mode: "no-cors", 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                screenshotCount++;
+                document.getElementById("screenshot-count").innerText = `${screenshotCount} 張`;
+                showLog(`[${type}] 上傳成功！`, "#4CAF50");
+            })
+            .catch(err => {
+                showLog(`[${type}] 上傳遭遇網路問題。`, "#f44336");
+            });
+        }
+
+        // ================= 新增：背景 LINE 通知發送模組 =================
+        function sendLineNotification(actionStatus) {
+            let now = new Date();
+            let timeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
+            let videoTitle = document.getElementById("video-schedule").innerText;
+
+            let payload = {
+                type: "LINE_NOTIFY", 
+                storeName: storeName,
+                action: actionStatus, 
+                videoTitle: videoTitle,
+                time: timeStr
+            };
+
+            fetch(gasUrl, {
+                method: "POST",
+                mode: "no-cors", 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payload)
+            }).catch(err => console.log("LINE通知請求發送失敗", err));
+        }
+        // ================================================================
+
+        // --- 拖曳防衝突設計 (支援自由縮放) ---
+        const infoBox = document.getElementById("info-box");
+        let isDragging = false, offsetX, offsetY;
+        infoBox.addEventListener("mousedown", (e) => {
+            if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+            
+            let rect = infoBox.getBoundingClientRect();
+            // 若點擊右下角，則認定為調整大小，放行不拖曳
+            if (e.clientX > rect.right - 25 && e.clientY > rect.bottom - 25) return; 
+
+            isDragging = true;
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+            infoBox.style.cursor = "grabbing";
+        });
+        document.addEventListener("mousemove", (e) => {
+            if (!isDragging) return;
+            infoBox.style.left = (e.clientX - offsetX) + "px";
+            infoBox.style.top = (e.clientY - offsetY) + "px";
+        });
+        document.addEventListener("mouseup", () => {
+            isDragging = false;
+            infoBox.style.cursor = "move";
+        });
+    </script>
+</body>
+</html>
