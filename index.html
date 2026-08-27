@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>門店內訓自動播放系統</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; font-family: '微軟正黑體', sans-serif; }
+        #player { width: 100vw; height: 100vh; pointer-events: none; }
+        
+        /* 輕量化彈性資訊方框 */
+        #info-box {
+            position: absolute; top: 10%; left: 2%; 
+            background: rgba(0, 0, 0, 0.75); color: #fff;
+            padding: 15px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 9999; cursor: move;
+            min-width: 150px; max-width: 50%; width: auto; 
+            resize: both; overflow: hidden;
+        }
+        #info-box h2 { margin: 0 0 10px 0; font-size: 16px; color: #4CAF50; border-bottom: 1px solid #4CAF50; padding-bottom: 5px; }
+        
+        .info-row { display: flex; margin-bottom: 6px; font-size: 13px; line-height: 1.4; }
+        .info-label { color: #aaa; font-weight: bold; white-space: nowrap; margin-right: 5px; }
+        .info-value { flex: 1; word-break: break-all; }
+        
+        #status-log {
+            margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.1);
+            border-radius: 6px; font-size: 12px; min-height: 20px; color: #ffeb3b;
+        }
+        
+        #test-btn {
+            display: none; 
+            margin-top: 10px; width: 100%; padding: 8px;
+            background: #2196F3; color: white; border: none;
+            border-radius: 6px; cursor: pointer; font-size: 14px;
+        }
+        #test-btn:hover { background: #1976D2; }
+
+        /* 版權宣告樣式 */
+        .copyright-text {
+            font-size: 10px; color: #888; text-align: center; 
+            margin-top: 12px; padding-top: 8px; 
+            border-top: 1px dashed rgba(255,255,255,0.2);
+            pointer-events: none;
+        }
+
+        #settings-modal {
+            display: none; position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); background: #222;
+            padding: 25px; border-radius: 10px; color: white;
+            z-index: 10000; width: 380px; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            max-height: 90vh; overflow-y: auto;
+        }
+        .modal-input { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; }
+        .modal-btn { background: #4CAF50; color: white; border: none; padding: 10px 20px; cursor: pointer; width: 100%; font-size: 16px; border-radius: 6px;}
+        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; }
+
+        /* 精美密碼驗證框與錯誤提示框樣式 */
+        #password-modal, #alert-modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #2b2b2b; padding: 25px 30px; border-radius: 12px; color: white; z-index: 10001;
+            width: 280px; box-shadow: 0 10px 30px rgba(0,0,0,0.9); text-align: center; border: 1px solid #444;
+        }
+        #alert-modal { z-index: 10002; width: 300px; }
+        
+        #password-modal h3, #alert-modal h3 { margin-top: 0; color: #FF9800; border-bottom: 1px solid #555; padding-bottom: 10px; font-size: 18px; }
+        #download-password { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #555; background: #1a1a1a; color: white; text-align: center; font-size: 20px; letter-spacing: 5px; box-sizing: border-box; }
+        #download-password:focus { outline: none; border-color: #FF9800; }
+        
+        .install-guide {
+            background: rgba(255,255,255,0.05); border-radius: 8px; padding: 15px;
+            margin-top: 15px; font-size: 13px; color: #ccc; line-height: 1.6;
+            border: 1px dashed rgba(255,255,255,0.2);
+        }
+        .install-guide-title { color: #4CAF50; font-weight: bold; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; }
+        .copy-url { background: #111; color: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #444; user-select: all; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+    <div id="player"></div>
+
+    <div id="info-box">
+        <h2>📌 門店自動巡檢 V1.5</h2>
+        <div class="info-row"><div class="info-label">🏪 門店：</div><div class="info-value" id="store-name">讀取中...</div></div>
+        <div class="info-row"><div class="info-label">📅 目前：</div><div class="info-value" id="current-time">讀取中...</div></div>
+        <div class="info-row"><div class="info-label">⏰ 下次：</div><div class="info-value" id="next-schedule-time" style="color:#FF9800;">計算中...</div></div>
+        <div class="info-row"><div class="info-label">🎬 排程：</div><div class="info-value" id="video-schedule">載入中...</div></div>
+        <div class="info-row"><div class="info-label">▶ 已播：</div><div class="info-value" id="total-play-time">0 分鐘</div></div>
+        <div class="info-row"><div class="info-label">⏱ 影片：</div><div class="info-value"><span id="video-current-time">00:00</span></div></div>
+        <div class="info-row"><div class="info-label">📸 截圖：</div><div class="info-value" id="screenshot-count">0 張</div></div>
+        <div id="status-log">系統待命中...</div>
+        <button id="test-btn" onclick="takeAndUploadScreenshot('手動測試')">馬上測試一鍵截圖</button>
+        
+        <div class="copyright-text">
+            原點數位科技 © 2026 All rights reserved.
+        </div>
+    </div>
+
+    <div id="overlay"></div>
+    
+    <!-- 系統設定選單 -->
+    <div id="settings-modal">
+        <h3 style="margin-top:0; border-bottom: 1px solid #444; padding-bottom: 10px;">⚙️ 系統進階設定</h3>
+        <label>門店名稱：</label>
+        <input type="text" id="input-store-name" class="modal-input" placeholder="例如：中清店">
+        <label>接收端 Google URL：</label>
+        <input type="text" id="input-gas-url" class="modal-input" placeholder="貼上 /exec 結尾的網址">
+        <label>每日開播時間 (HH:mm, 逗號分隔)：</label>
+        <input type="text" id="input-play-times" class="modal-input" placeholder="例如：12:00, 18:00">
+        <label>截圖排程秒數 (逗號分隔)：</label>
+        <input type="text" id="input-capture-times" class="modal-input" placeholder="例如：60, 1750">
+        <label>滿時自動停止並縮小 (分鐘)：</label>
+        <input type="number" id="input-stop-time" class="modal-input" placeholder="例如：30">
+        
+        <button class="modal-btn" onclick="saveSettings()">儲存並重新載入</button>
+        
+        <button class="modal-btn" onclick="showPasswordModal('DOWNLOAD')" style="background: #FF9800; margin-top: 15px;">📥 點我下載外掛安裝檔 (.crx)</button>
+        
+        <div class="install-guide">
+            <div class="install-guide-title">💡 擴充功能安裝步驟：</div>
+            <div>1️⃣ 複製並前往網址： <span class="copy-url">chrome://extensions/</span></div>
+            <div>2️⃣ 開啟右上角的 <b>「開發人員模式」</b></div>
+            <div>3️⃣ 將剛下載的 <b>Extension.crx</b> 檔案<b>直接拖曳</b>進畫面中</div>
+        </div>
+
+        <button class="modal-btn" onclick="closeSettings()" style="background:#666; margin-top:15px;">取消關閉</button>
+    </div>
+
+    <!-- 密碼驗證框 -->
+    <div id="password-modal">
+        <h3>🔒 權限驗證</h3>
+        <p style="font-size: 13px; color: #ccc; margin-bottom: 15px;">請輸入授權碼以執行此操作</p>
+        <input type="password" id="download-password" placeholder="輸入密碼" onkeypress="handlePasswordKey(event)">
+        <p id="password-error" style="color: #f44336; font-size: 13px; display: none; margin-top: -10px; margin-bottom: 10px;">❌ 密碼錯誤，請重新輸入</p>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="checkPassword()" style="flex: 1; background: #4CAF50; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">確認</button>
+            <button onclick="closePasswordModal()" style="flex: 1; background: #666; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">取消</button>
+        </div>
+    </div>
+
+    <!-- 精美錯誤提示對話框 -->
+    <div id="alert-modal">
+        <h3 style="color: #f44336;">⚠️ 系統提示</h3>
+        <p id="alert-message" style="font-size: 15px; color: #ddd; margin-bottom: 25px; line-height: 1.6; white-space: pre-wrap;"></p>
+        <button onclick="closeAlertModal()" style="width: 100%; background: #4CAF50; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 16px;">了解</button>
+    </div>
+    
+    <!-- 替換為 Google Drive 直接下載格式 -->
+    <a id="hidden-download-link" href="https://drive.google.com/uc?export=download&id=1kLWeTKHt_08LAI3zwbuRQfOwcTJGGZj2" target="_blank" style="display: none;"></a>
+
+    <script>
+        // --- 07/01 ~ 09/30 完整播放清單庫 ---
+        const playlistSchedule = {
+            "07/01": { title: "讓客人說Yes !優質的銷售心法 下集", id: "PLCV-Y48MR1Jd-DqEGEVW0txYmxFOpEmGz" },
+            "07/02": { title: "敢於挑戰夢想 上集", id: "PLCV-Y48MR1JcVZKK-xxhyRIo0recmZoJT" },
+            "07/03": { title: "敢於挑戰夢想 下集", id: "PLCV-Y48MR1Je4gmZw6gGSBWXFmgTiFN4b" },
+            // ... 中間清單省略（皆未更動）...
+            "09/29": { title: "換個腦袋 出路無限(二)", id: "PLCV-Y48MR1JdSSewV8mwnVn264uDiVv4v" },
+            "09/30": { title: "換個腦袋 出路無限(三)", id: "PLCV-Y48MR1JeahnPgzdFJTOezmNtUAziE" }
+        };
+
+        // --- 預設與自訂參數處理 ---
+        let storeName = localStorage.getItem("storeName") || "請輸入店名";
+        let gasUrl = localStorage.getItem("gasUrl") || "https://script.google.com/macros/s/AKfycbxteseOvZiS-GuDTzfmp4MYTJEQe6bi7XwYKYRoJeIjrCATEfOIowdQsM2QslC63_C3/exec";
+        let playTimesStr = localStorage.getItem("playTimes") || "12:00, 18:00, 00:00";
+        let captureTimesStr = localStorage.getItem("captureTimes") || "60, 1750";
+        let stopTimeStr = localStorage.getItem("stopTime") || "30";
+
+        const dailySchedules = playTimesStr.split(",").map(s => s.trim());
+        const scheduleSeconds = captureTimesStr.split(",").map(s => parseInt(s.trim()));
+        const PLAY_DURATION_LIMIT = parseInt(stopTimeStr) * 60;
+        
+        let hasTriggered = {};
+        let player, playStartTime = null, screenshotCount = 0;
+        let isTaskCompleted = true; 
+        let lastTriggeredSchedule = null; 
+        let hasReloadedToday = false; 
+        let isEmergencyExit = false;
+        
+        // 新增：排程失敗次數計算（避免單一排程狂炸 Line 通知）
+        let failureNotificationCount = 0; 
+
+        // --- UI 初始化 ---
+        document.getElementById("store-name").innerText = storeName;
+        document.getElementById("input-store-name").value = storeName;
+        document.getElementById("input-gas-url").value = gasUrl;
+        document.getElementById("input-play-times").value = playTimesStr;
+        document.getElementById("input-capture-times").value = captureTimesStr;
+        document.getElementById("input-stop-time").value = stopTimeStr;
+
+        // ======== 精美提示對話框呼叫函數 ========
+        function customAlert(msg) {
+            document.getElementById('alert-message').innerText = msg;
+            document.getElementById('alert-modal').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+        }
+
+        function closeAlertModal() {
+            document.getElementById('alert-modal').style.display = 'none';
+            if (document.getElementById('settings-modal').style.display !== 'block' && 
+                document.getElementById('password-modal').style.display !== 'block') {
+                document.getElementById('overlay').style.display = 'none';
+            }
+        }
+        
+        if (storeName === "請輸入店名") {
+            customAlert("若初次設定 請依照流程安裝設定\n如有問題請洽工程師");
+            document.getElementById("store-name").style.color = "#f44336";
+        }
+
+        // --- 遺言機制 (異常關閉/緊急停止 分流) ---
+        window.addEventListener('beforeunload', function (e) {
+            let action = isEmergencyExit ? "🛑 緊急停止" : "⚠️ 系統異常關閉";
+            let payload = JSON.stringify({
+                type: "LINE_NOTIFY",
+                storeName: storeName,
+                action: action,
+                videoTitle: document.getElementById("video-schedule").innerText,
+                time: new Date().toLocaleTimeString('zh-TW', { hour12: false })
+            });
+            navigator.sendBeacon(gasUrl, payload);
+        });
+
+        // --- 彈出設定視窗 (ESC/Alt+F4 監聽與密碼) ---
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape" || (event.altKey && event.key === "F4")) {
+                isEmergencyExit = true; 
+            }
+            if (event.key === "Escape") {
+                if (document.getElementById('settings-modal').style.display === 'block') {
+                    closeSettings();
+                } else if (document.getElementById('password-modal').style.display !== 'block' && 
+                           document.getElementById('alert-modal').style.display !== 'block') {
+                    showPasswordModal('ESC');
+                }
+            }
+        });
+
+        function saveSettings() {
+            let inputStoreName = document.getElementById("input-store-name").value.trim();
+            if (inputStoreName === "" || inputStoreName === "請輸入店名") {
+                customAlert("請輸入正確的門店名稱！\n不可為空白或預設名稱。");
+                return;
+            }
+            localStorage.setItem("storeName", inputStoreName);
+            localStorage.setItem("gasUrl", document.getElementById("input-gas-url").value.trim());
+            localStorage.setItem("playTimes", document.getElementById("input-play-times").value.trim());
+            localStorage.setItem("captureTimes", document.getElementById("input-capture-times").value.trim());
+            localStorage.setItem("stopTime", document.getElementById("input-stop-time").value.trim());
+            location.reload();
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+            closePasswordModal(); 
+        }
+
+        // --- 密碼驗證邏輯 ---
+        let passwordContext = ""; 
+
+        function showPasswordModal(context) {
+            passwordContext = context;
+            document.getElementById('password-modal').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('download-password').value = ''; 
+            document.getElementById('password-error').style.display = 'none'; 
+            document.getElementById('download-password').focus(); 
+        }
+
+        function closePasswordModal() {
+            document.getElementById('password-modal').style.display = 'none';
+            if (passwordContext === "ESC" && document.getElementById('alert-modal').style.display !== 'block') {
+                document.getElementById('overlay').style.display = 'none';
+            }
+        }
+
+        function checkPassword() {
+            let pwd = document.getElementById('download-password').value;
+            if (pwd === "8888") {
+                document.getElementById('password-modal').style.display = 'none';
+                if (passwordContext === "ESC") {
+                    document.getElementById('settings-modal').style.display = 'block';
+                    document.getElementById('test-btn').style.display = 'block'; 
+                } else if (passwordContext === "DOWNLOAD") {
+                    document.getElementById('hidden-download-link').click(); 
+                    showLog("✅ 授權成功，正在下載外掛檔案...", "#4CAF50");
+                }
+            } else {
+                document.getElementById('password-error').style.display = 'block';
+                document.getElementById('download-password').value = ''; 
+                document.getElementById('download-password').focus(); 
+            }
+        }
+
+        function handlePasswordKey(event) {
+            if (event.key === "Enter") {
+                checkPassword();
+            }
+        }
+
+        // --- 日期與清單動態對應邏輯 ---
+        function getTodayKey() {
+            let today = new Date();
+            let month = (today.getMonth() + 1).toString().padStart(2, '0');
+            let day = today.getDate().toString().padStart(2, '0');
+            return `${month}/${day}`;
+        }
+        
+        const dateKey = getTodayKey();
+        const currentPlaylistData = playlistSchedule[dateKey];
+        const targetPlaylistId = currentPlaylistData ? currentPlaylistData.id : "PLCV-Y48MR1Jdn2OHxmCDXk60S6wj7FFLb";
+        const targetTitle = currentPlaylistData ? currentPlaylistData.title : "本日無排程(預設)";
+        document.getElementById("video-schedule").innerText = `[${dateKey}] ${targetTitle}`;
+
+        // --- YouTube API 載入 ---
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+                playerVars: { 
+                    'autoplay': 1, 
+                    'controls': 0, 
+                    'loop': 1, 
+                    'mute': 1, 
+                    'listType': 'playlist',
+                    'list': targetPlaylistId
+                },
+                // 加入影片載入錯誤監聽，匯入防爆機制
+                events: {
+                    'onError': onPlayerError
+                }
+            });
+        }
+
+        function onPlayerError(event) {
+            showLog("影片載入或播放發生錯誤 (代碼: " + event.data + ")", "#f44336");
+            sendFailureNotification("影片播放錯誤 (代碼: " + event.data + ")");
+        }
+
+        // --- 排程預測與日期顯示 ---
+        function updateNextSchedule(now) {
+            let currentMinutes = now.getHours() * 60 + now.getMinutes();
+            let sortedSchedules = dailySchedules.map(t => {
+                let parts = t.split(":");
+                return {
+                    h: parseInt(parts[0]),
+                    m: parseInt(parts[1]),
+                    totalMinutes: parseInt(parts[0]) * 60 + parseInt(parts[1]),
+                    str: t
+                };
+            }).sort((a,b) => a.totalMinutes - b.totalMinutes);
+            
+            let next = sortedSchedules.find(s => s.totalMinutes > currentMinutes);
+            
+            if (next) {
+                let month = (now.getMonth() + 1).toString().padStart(2, '0');
+                let day = now.getDate().toString().padStart(2, '0');
+                document.getElementById("next-schedule-time").innerText = `${month}/${day} ${next.str}`;
+            } else {
+                let tomorrow = new Date(now);
+                tomorrow.setDate(now.getDate() + 1);
+                let month = (tomorrow.getMonth() + 1).toString().padStart(2, '0');
+                let day = tomorrow.getDate().toString().padStart(2, '0');
+                document.getElementById("next-schedule-time").innerText = `${month}/${day} ${sortedSchedules[0].str} (明日)`;
+            }
+        }
+
+        // --- Kiosk 全螢幕監控迴圈 (每 5 秒) ---
+        setInterval(() => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log("正在等待使用者互動以進入全螢幕...");
+                });
+            }
+        }, 5000);
+
+        // --- 主時鐘與播放排程觸發迴圈 (每 1 秒) ---
+        setInterval(() => {
+            let now = new Date();
+            
+            // 擷取月、日、時間，更新畫面上的「目前時間」
+            let mStr = (now.getMonth() + 1).toString().padStart(2, '0');
+            let dStr = now.getDate().toString().padStart(2, '0');
+            let timeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
+            let currentHHmm = timeStr.substring(0, 5); 
+
+            document.getElementById("current-time").innerText = `${mStr}/${dStr} ${timeStr}`;
+            updateNextSchedule(now);
+
+            // 更新影片當前時間
+            if(player && player.getCurrentTime) {
+                let cSec = Math.floor(player.getCurrentTime());
+                let m = Math.floor(cSec / 60).toString().padStart(2, '0');
+                let s = (cSec % 60).toString().padStart(2, '0');
+                document.getElementById("video-current-time").innerText = `${m}:${s}`;
+            }
+
+            // 1. 觸發開播與放大機制
+            if (dailySchedules.includes(currentHHmm) && currentHHmm !== lastTriggeredSchedule && isTaskCompleted) {
+                lastTriggeredSchedule = currentHHmm;
+                
+                // 每次新排程開始，重置失敗通知保護計數
+                failureNotificationCount = 0;
+                
+                showLog(`到達排程時間！自動放大視窗並開始...`, "#4CAF50");
+                window.postMessage({ type: "REQUEST_MAXIMIZE" }, "*"); 
+                
+                playStartTime = now.getTime();
+                isTaskCompleted = false;
+
+                sendLineNotification("🟢 開始播放");
+                
+                scheduleSeconds.forEach(sec => hasTriggered[sec] = false);
+                screenshotCount = 0;
+                document.getElementById("screenshot-count").innerText = `0 張`;
+                
+                setTimeout(() => { if (player && player.playVideo) player.playVideo(); }, 1500);
+            }
+
+            // 2. 播放中狀態計算
+            if (playStartTime && !isTaskCompleted) {
+                let elapsedSeconds = Math.floor((now.getTime() - playStartTime) / 1000);
+                document.getElementById("total-play-time").innerText = Math.floor(elapsedSeconds / 60) + " 分鐘";
+
+                scheduleSeconds.forEach(targetSec => {
+                    if (elapsedSeconds >= targetSec && !hasTriggered[targetSec]) {
+                        hasTriggered[targetSec] = true;
+                        let typeStr = targetSec < 60 ? `${targetSec}秒` : `${targetSec/60}分鐘`;
+                        takeAndUploadScreenshot(`排程: ${typeStr}`);
+                    }
+                });
+
+                // 3. 結束與縮小機制
+                if (elapsedSeconds >= PLAY_DURATION_LIMIT) {
+                    isTaskCompleted = true; 
+                    sendLineNotification("🔴 結束播放");
+
+                    if (player && typeof player.pauseVideo === 'function') player.pauseVideo();
+                    showLog(`✅ 任務完成，縮小中...`, "#4CAF50");
+                    
+                    setTimeout(() => {
+                        window.postMessage({ type: "REQUEST_MINIMIZE" }, "*");
+                    }, 3000); 
+                }
+            }
+
+            // 4. 每日跨夜自動重整更新當日影片
+            if (currentHHmm === "03:00" && !hasReloadedToday) {
+                hasReloadedToday = true;
+                location.reload(); 
+            }
+            if (currentHHmm === "04:00") {
+                hasReloadedToday = false; 
+            }
+        }, 1000);
+
+        function showLog(msg, color = "#ffeb3b") {
+            const logEl = document.getElementById("status-log");
+            logEl.style.color = color;
+            logEl.innerText = msg;
+        }
+
+        // --- 安全的失敗 Line 通知發送模組 (避免流量爆破) ---
+        function sendFailureNotification(reason) {
+            if (failureNotificationCount < 2) {
+                failureNotificationCount++;
+                sendLineNotification("⚠️ 運行異常: " + reason);
+            } else {
+                console.log("已達該排程錯誤通知上限，暫停發送: " + reason);
+            }
+        }
+
+        // --- 外掛截圖與上傳機制 ---
+        function takeAndUploadScreenshot(type = "自動截圖") {
+            showLog(`[${type}] 呼叫外掛截圖中...`, "#03A9F4");
+            window.postMessage({ type: "REQUEST_CAPTURE" }, "*");
+
+            let captureTimeout = setTimeout(() => {
+                showLog(`[${type}] 截圖失敗：未偵測到擴充功能！`, "#f44336");
+                sendFailureNotification("未偵測到擴充功能");
+            }, 3000);
+
+            function captureListener(event) {
+                if (event.source !== window || !event.data) return;
+                if (event.data.type === "RECEIVE_CAPTURE") {
+                    clearTimeout(captureTimeout); 
+                    window.removeEventListener("message", captureListener);
+
+                    let imgData = event.data.dataUrl;
+                    if(!imgData) {
+                        showLog(`[${type}] 擷取失敗，無畫面。`, "#f44336");
+                        sendFailureNotification("擷取失敗(無畫面)");
+                        return;
+                    }
+                    showLog(`[${type}] 擷取成功，上傳雲端中...`, "#ffeb3b");
+                    
+                    let now = new Date();
+                    let dateStr = (now.getMonth() + 1).toString().padStart(2, '0') + "/" + now.getDate().toString().padStart(2, '0');
+                    let timeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
+                    let fullTimestamp = `${dateStr} ${timeStr}`;
+
+                    uploadToCloud(imgData, type, fullTimestamp);
+                }
+            }
+            window.addEventListener("message", captureListener);
+        }
+
+        function uploadToCloud(base64Data, type, fullTimestamp) {
+            let payload = {
+                image: base64Data,
+                storeName: storeName,
+                time: fullTimestamp, 
+                type: type,
+                videoTitle: document.getElementById("video-schedule").innerText
+            };
+
+            fetch(gasUrl, {
+                method: "POST",
+                mode: "no-cors", 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                screenshotCount++;
+                document.getElementById("screenshot-count").innerText = `${screenshotCount} 張`;
+                showLog(`[${type}] 上傳成功！`, "#4CAF50");
+            })
+            .catch(err => {
+                showLog(`[${type}] 上傳遭遇網路問題。`, "#f44336");
+                sendFailureNotification("上傳截圖遭遇網路異常");
+            });
+        }
+
+        // --- 背景 LINE 通知發送模組 ---
+        function sendLineNotification(actionStatus) {
+            let now = new Date();
+            let timeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
+            let videoTitle = document.getElementById("video-schedule").innerText;
+
+            let payload = {
+                type: "LINE_NOTIFY", 
+                storeName: storeName,
+                action: actionStatus, 
+                videoTitle: videoTitle,
+                time: timeStr
+            };
+
+            fetch(gasUrl, {
+                method: "POST",
+                mode: "no-cors", 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payload)
+            }).catch(err => console.log("LINE通知請求發送失敗", err));
+        }
+
+        // --- 拖曳防衝突設計 (支援自由縮放) ---
+        const infoBox = document.getElementById("info-box");
+        let isDragging = false, offsetX, offsetY;
+        infoBox.addEventListener("mousedown", (e) => {
+            if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+            
+            let rect = infoBox.getBoundingClientRect();
+            if (e.clientX > rect.right - 25 && e.clientY > rect.bottom - 25) return; 
+
+            isDragging = true;
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+            infoBox.style.cursor = "grabbing";
+        });
+        document.addEventListener("mousemove", (e) => {
+            if (!isDragging) return;
+            infoBox.style.left = (e.clientX - offsetX) + "px";
+            infoBox.style.top = (e.clientY - offsetY) + "px";
+        });
+        document.addEventListener("mouseup", () => {
+            isDragging = false;
+            infoBox.style.cursor = "move";
+        });
+    </script>
+</body>
+</html>
