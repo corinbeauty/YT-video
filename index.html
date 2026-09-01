@@ -148,11 +148,9 @@
         <button onclick="closeAlertModal()" style="width: 100%; background: #4CAF50; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 16px;">了解</button>
     </div>
     
-    <!-- 替換為 Google Drive 直接下載格式 -->
     <a id="hidden-download-link" href="https://drive.google.com/uc?export=download&id=1kLWeTKHt_08LAI3zwbuRQfOwcTJGGZj2" target="_blank" style="display: none;"></a>
 
     <script>
-        // --- 07/01 ~ 09/30 完整播放清單庫 ---
         const playlistSchedule = {
             "07/01": { title: "讓客人說Yes !優質的銷售心法 下集", id: "PLCV-Y48MR1Jd-DqEGEVW0txYmxFOpEmGz" },
             "07/02": { title: "敢於挑戰夢想 上集", id: "PLCV-Y48MR1JcVZKK-xxhyRIo0recmZoJT" },
@@ -269,8 +267,8 @@
         let lastTriggeredSchedule = null; 
         let hasReloadedToday = false; 
         let isEmergencyExit = false;
-        let isIntentionalReload = false; // 新增：判斷是否為系統主動重整
-        let hasSentCloseNotify = false;  // 新增：確保生命週期內只發送一次通知
+        let isIntentionalReload = false; // 判斷是否為系統主動重整
+        let hasSentCloseNotify = false;  // 確保生命週期內只發送一次通知
 
         // --- UI 初始化 ---
         document.getElementById("store-name").innerText = storeName;
@@ -302,7 +300,6 @@
 
         // --- 遺言機制 (異常關閉/緊急停止 分流) ---
         window.addEventListener('beforeunload', function (e) {
-            // 避免因修改設定或跨夜重整而觸發異常關閉通知，且確保只通知一次
             if (isIntentionalReload || hasSentCloseNotify) return; 
             hasSentCloseNotify = true;
 
@@ -344,7 +341,7 @@
             localStorage.setItem("captureTimes", document.getElementById("input-capture-times").value.trim());
             localStorage.setItem("stopTime", document.getElementById("input-stop-time").value.trim());
             
-            isIntentionalReload = true; // 標記為正常主動重整，不觸發異常通知
+            isIntentionalReload = true; 
             location.reload();
         }
 
@@ -458,20 +455,10 @@
             }
         }
 
-        // --- Kiosk 全螢幕監控迴圈 (每 5 秒) ---
-        setInterval(() => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.log("正在等待使用者互動以進入全螢幕...");
-                });
-            }
-        }, 5000);
-
         // --- 主時鐘與播放排程觸發迴圈 (每 1 秒) ---
         setInterval(() => {
             let now = new Date();
             
-            // 擷取月、日、時間，更新畫面上的「目前時間」
             let mStr = (now.getMonth() + 1).toString().padStart(2, '0');
             let dStr = now.getDate().toString().padStart(2, '0');
             let timeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
@@ -480,7 +467,6 @@
             document.getElementById("current-time").innerText = `${mStr}/${dStr} ${timeStr}`;
             updateNextSchedule(now);
 
-            // 更新影片當前時間
             if(player && player.getCurrentTime) {
                 let cSec = Math.floor(player.getCurrentTime());
                 let m = Math.floor(cSec / 60).toString().padStart(2, '0');
@@ -537,7 +523,7 @@
             // 4. 每日跨夜自動重整更新當日影片
             if (currentHHmm === "03:00" && !hasReloadedToday) {
                 hasReloadedToday = true;
-                isIntentionalReload = true; // 標記為正常主動重整，避免誤送異常通知
+                isIntentionalReload = true; 
                 location.reload(); 
             }
             if (currentHHmm === "04:00") {
