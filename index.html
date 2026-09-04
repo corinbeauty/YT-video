@@ -83,7 +83,7 @@
     <div id="player"></div>
 
     <div id="info-box">
-        <h2>📌 門店自動巡檢 V1.5</h2>
+        <h2>📌 門店自動巡檢 V1.6</h2>
         <div class="info-row"><div class="info-label">🏪 門店：</div><div class="info-value" id="store-name">讀取中...</div></div>
         <div class="info-row"><div class="info-label">📅 目前：</div><div class="info-value" id="current-time">讀取中...</div></div>
         <div class="info-row"><div class="info-label">⏰ 下次：</div><div class="info-value" id="next-schedule-time" style="color:#FF9800;">計算中...</div></div>
@@ -267,8 +267,12 @@
         let lastTriggeredSchedule = null; 
         let hasReloadedToday = false; 
         let isEmergencyExit = false;
-        let isIntentionalReload = false; // 判斷是否為系統主動重整
-        let hasSentCloseNotify = false;  // 確保生命週期內只發送一次通知
+        
+        // --- 核心鎖定機制變數 ---
+        let isIntentionalReload = false;
+        let hasSentCloseNotify = false; 
+        let hasSentStartNotify = false; // 鎖定開播通知，確保每排程只發送一次
+        let hasSentEndNotify = false;   // 鎖定結播通知，確保每排程只發送一次
 
         // --- UI 初始化 ---
         document.getElementById("store-name").innerText = storeName;
@@ -300,6 +304,10 @@
 
         // --- 遺言機制 (異常關閉/緊急停止 分流) ---
         window.addEventListener('beforeunload', function (e) {
+            // 【重要修改】若目前沒有在播放排程（任務已完成或待命），絕對不發送異常關閉通知
+            if (isTaskCompleted) return;
+            
+            // 確保關閉生命週期中只發送一次
             if (isIntentionalReload || hasSentCloseNotify) return; 
             hasSentCloseNotify = true;
 
@@ -478,13 +486,21 @@
             if (dailySchedules.includes(currentHHmm) && currentHHmm !== lastTriggeredSchedule && isTaskCompleted) {
                 lastTriggeredSchedule = currentHHmm;
                 
+                // 重設目前排程的專用鎖
+                isTaskCompleted = false;
+                hasSentStartNotify = false;
+                hasSentEndNotify = false;
+                
                 showLog(`到達排程時間！自動放大視窗並開始...`, "#4CAF50");
                 window.postMessage({ type: "REQUEST_MAXIMIZE" }, "*"); 
                 
                 playStartTime = now.getTime();
-                isTaskCompleted = false;
 
-                sendLineNotification("🟢 開始播放");
+                // 【單次發送鎖】確保不重複送出開始播放
+                if (!hasSentStartNotify) {
+                    sendLineNotification("🟢 開始播放");
+                    hasSentStartNotify = true;
+                }
                 
                 scheduleSeconds.forEach(sec => hasTriggered[sec] = false);
                 screenshotCount = 0;
@@ -509,7 +525,12 @@
                 // 3. 結束與縮小機制
                 if (elapsedSeconds >= PLAY_DURATION_LIMIT) {
                     isTaskCompleted = true; 
-                    sendLineNotification("🔴 結束播放");
+                    
+                    // 【單次發送鎖】確保不重複送出結束播放
+                    if (!hasSentEndNotify) {
+                        sendLineNotification("🔴 結束播放");
+                        hasSentEndNotify = true;
+                    }
 
                     if (player && typeof player.pauseVideo === 'function') player.pauseVideo();
                     showLog(`✅ 任務完成，縮小中...`, "#4CAF50");
