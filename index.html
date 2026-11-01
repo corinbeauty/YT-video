@@ -575,7 +575,8 @@
                 scheduleSeconds.forEach(targetSec => {
                     if (elapsedSeconds >= targetSec && !hasTriggered[targetSec]) {
                         hasTriggered[targetSec] = true;
-                        let typeStr = targetSec < 60 ? `${targetSec}秒` : `${targetSec/60}分鐘`;
+                        // 改用 Math.ceil 取無條件進位，不再產生小數點
+                        let typeStr = targetSec < 60 ? `${targetSec}秒` : `${Math.ceil(targetSec/60)}分鐘`;
                         takeAndUploadScreenshot(`排程: ${typeStr}`);
                     }
                 });
@@ -585,8 +586,9 @@
                     isTaskCompleted = true; 
                     
                     if (!hasSentEndNotify) {
-                        let msg = isRestTime ? "🔴 進入假日禁播時段，強制結束" : "🔴 結束播放";
-                        sendLineNotification(msg);
+                        // 取消播放結束通知需求，將下方推播註解掉
+                        // let msg = isRestTime ? "🔴 進入假日禁播時段，強制結束" : "🔴 結束播放";
+                        // sendLineNotification(msg);
                         hasSentEndNotify = true;
                     }
 
